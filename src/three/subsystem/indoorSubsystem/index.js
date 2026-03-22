@@ -17,9 +17,6 @@ import { dynamicFade, fadeByTime } from "../../../shader";
 import { SceneHint } from "../../components/SceneHint";
 import { equipmentTreeManager } from "./equipmentTreeManager";
 
-let rightMouseupTime = 0;
-let rightClickTime = 0; // 添加全局的右键点击时间戳
-
 /**@type {OrbitControls} */
 const controlsParameters = {
   maxPolarAngle: Math.PI / 2.05,
@@ -608,9 +605,8 @@ export class IndoorSubsystem extends CustomSystem {
         return;
       }
 
-      // 重置双击检测时间戳，确保新的楼层切换时双击检测是干净的
-      rightMouseupTime = 0;
-      rightClickTime = 0; // 重置全局右键点击时间戳
+      // 与 Core 共用一套右键双击间隔状态，切换楼层后双击可稳定回到整栋楼
+      this.core.resetRightDblClickState();
 
       this.resetData();
 
@@ -764,55 +760,22 @@ export class IndoorSubsystem extends CustomSystem {
     });
     this.eventClear.push(del);
   }
+
+  /** 取消跟随后与 addRightDbClickQuit 一致，恢复「右键双击回室外」 */
+  addRightDbClickReset() {
+    this.addRightDbClickQuit();
+  }
+
+  /** 与 Store3D.rightDblClickListener 一致（画布 mouseup、250ms），整栋楼与单层共用同一套检测 */
   rightDblClickListener(fn) {
-    // 改为document事件监听
-    const handleMouseUp = (e) => {
-      console.log("右键点击，时间戳测试一下", e.button);
-      if (e.button !== 2) return; // 只处理右键
-
-      const timeStamp = new Date().getTime();
-      console.log(
-        `右键点击，时间戳: ${timeStamp}, 上次时间戳: ${rightMouseupTime}`
-      );
-
-      if (rightMouseupTime === 0) {
-        // 第一次右键点击，记录时间戳
-        rightMouseupTime = timeStamp;
-        console.log("第一次右键点击，记录时间戳");
-      } else if (timeStamp - rightMouseupTime < 300) {
-        // 双击检测成功
-        console.log("检测到右键双击，执行恢复楼栋功能");
-        fn(e);
-        rightMouseupTime = 0; // 重置时间戳，避免连续触发
-        rightClickTime = 0; // 同时重置全局右键点击时间戳
-      } else {
-        // 双击检测失败，更新为新的时间戳
-        rightMouseupTime = timeStamp;
-        console.log("双击检测失败，更新为新的时间戳");
-      }
-    };
-
-    // 添加document事件监听
-    document.addEventListener("mouseup", handleMouseUp);
-
-    // 返回清理函数
-    const del = () => {
-      document.removeEventListener("mouseup", handleMouseUp);
-      // 清理时重置时间戳，确保下次使用时是干净的状态
-      rightMouseupTime = 0;
-      rightClickTime = 0;
-    };
-
-    return del;
+    return this.core.rightDblClickListener(fn);
   }
 
   /**
    * 重置右键双击事件的时间戳
    */
   resetRightClickTimestamps() {
-    rightMouseupTime = 0;
-    rightClickTime = 0;
-    console.log("右键双击事件时间戳已重置");
+    this.core.resetRightDblClickState();
   }
   switchFloorAnimate(target) {
     if (
@@ -1762,12 +1725,13 @@ export class IndoorSubsystem extends CustomSystem {
   setupFloorRaycastEvents(floor) {
     console.log(`开始设置楼层 ${floor} 的射线检测事件`);
     this.clearFloorRaycastEvents();
-    const children = this.simpleInsert[floor];
+    const children = this.simpleInsert[floor] || [];
     this._indoorRaycastClearFns = [];
 
-    if (!children || children.length === 0) {
-      console.warn(`楼层 ${floor} 没有子对象，无法设置射线检测事件`);
-      return;
+    if (children.length === 0) {
+      console.warn(
+        `楼层 ${floor} 没有子对象，仍注册右键双击恢复整栋楼（无设备材质可还原）`
+      );
     }
 
     console.log(`楼层 ${floor} 有 ${children.length} 个子对象`);
@@ -2790,9 +2754,7 @@ export class IndoorSubsystem extends CustomSystem {
         return;
       }
 
-      // 重置双击检测时间戳，确保新的楼层切换时双击检测是干净的
-      rightMouseupTime = 0;
-      rightClickTime = 0; // 重置全局右键点击时间戳
+      this.core.resetRightDblClickState();
 
       this.resetData();
 

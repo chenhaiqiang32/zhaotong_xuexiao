@@ -774,6 +774,11 @@ export class Store3D extends CoreExtensions {
     return del;
   }
 
+  /** 与楼层切换等操作同步，避免两套右键双击状态不一致 */
+  resetRightDblClickState() {
+    rightMouseupTime = 0;
+  }
+
   // 定制化鼠标左键click 鼠标移动时不触发 右键不触发 连续点击时不触发
   addClickCustom(fn) {
     let timer = null;
