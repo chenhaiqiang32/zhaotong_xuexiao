@@ -103,6 +103,20 @@ export const onMessage = async () => {
           core.ground.switchWeather({ type: param.type, level: param.level });
           break;
         }
+        case "setBuildingShellTransparent": {
+          const p = event.data.param;
+          const on =
+            p === true ||
+            p === "true" ||
+            p === 1 ||
+            (typeof p === "object" && p && p.transparent === true);
+          core.ground.setBuildingShellTransparent(on);
+          break;
+        }
+        case "toggleBuildingShellTransparent": {
+          core.ground.toggleBuildingShellTransparent();
+          break;
+        }
         case "close": {
           core._stopRender();
           break;

@@ -665,7 +665,12 @@ export class IndoorSubsystem extends CustomSystem {
         // 如果已经有当前楼层，执行楼层内部切换
         this.floorSwitchInner(floor)
           .then(() => {
-            // 楼层内部切换完成，解析Promise
+            // 与首次进入某层一致：重新注册「右键双击恢复楼栋」，并恢复聚集/静默着色与提示
+            this.setupFloorRaycastEvents(floor);
+            if (this.sceneHint) {
+              this.sceneHint.updateMessage("右键双击恢复楼栋");
+            }
+            this.gatherOrSilentShader();
             resolve();
           })
           .catch((error) => {

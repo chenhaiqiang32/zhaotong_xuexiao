@@ -87,6 +87,8 @@ export class Ground extends CustomSystem {
     this.camera = core.camera;
     this.orientation = core.orientation;
     this.buildingModel = null;
+    /** 室内建筑外壳是否处于半透明透视状态 */
+    this.buildingShellTransparent = false;
     this.boxSelect = core.orientation.boxSelect;
     this.postprocessing = core.postprocessing;
 
@@ -889,6 +891,64 @@ string} name
         }
       }
     );
+  }
+
+  /**
+   * 对单个材质应用/恢复建筑外壳透视（与正常显示切换）
+   * @param {THREE.Material} mat
+   * @param {boolean} transparent
+   */
+  _applyBuildingShellMaterial(mat, transparent) {
+    if (!mat) return;
+    if (!mat.userData._buildingShellOrig) {
+      mat.userData._buildingShellOrig = {
+        opacity: mat.opacity,
+        transparent: mat.transparent,
+        depthWrite: mat.depthWrite,
+        transmission:
+          mat.transmission !== undefined ? mat.transmission : undefined,
+      };
+    }
+    const orig = mat.userData._buildingShellOrig;
+    if (transparent) {
+      mat.transparent = true;
+      mat.opacity = Math.max(0.06, Math.min(0.42, orig.opacity * 0.35));
+      mat.depthWrite = false;
+      if (orig.transmission !== undefined && mat.transmission !== undefined) {
+        mat.transmission = Math.max(0, Math.min(0.22, orig.transmission * 0.18));
+      }
+    } else {
+      mat.opacity = orig.opacity;
+      mat.transparent = orig.transparent;
+      mat.depthWrite = orig.depthWrite;
+      if (orig.transmission !== undefined && mat.transmission !== undefined) {
+        mat.transmission = orig.transmission;
+      }
+    }
+    mat.needsUpdate = true;
+  }
+
+  /**
+   * 设置室内建筑外壳（buildingModel）为透视半透明或恢复正常显示
+   * @param {boolean} transparent true 半透明透视，false 恢复加载时的外观
+   */
+  setBuildingShellTransparent(transparent) {
+    if (!this.buildingModel) return;
+    this.buildingShellTransparent = !!transparent;
+    this.buildingModel.traverse((child) => {
+      if (!child.isMesh || !child.material) return;
+      const list = Array.isArray(child.material)
+        ? child.material
+        : [child.material];
+      list.forEach((mat) =>
+        this._applyBuildingShellMaterial(mat, this.buildingShellTransparent)
+      );
+    });
+  }
+
+  /** 在建筑外壳半透明与正常显示之间切换 */
+  toggleBuildingShellTransparent() {
+    this.setBuildingShellTransparent(!this.buildingShellTransparent);
   }
 
   /**
