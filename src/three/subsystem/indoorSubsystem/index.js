@@ -22,6 +22,22 @@ const controlsParameters = {
   maxPolarAngle: Math.PI / 2.05,
 };
 
+/** 室内整体亮度：灯光强度、渲染器曝光、PBR 环境反射（可按观感微调） */
+const INDOOR_BRIGHTNESS = {
+  rendererExposure: 1.12,
+  ambient: 1.2,
+  directional: 1.15,
+  auxiliary: 0.38,
+  spotlight: 1.0,
+  envMapIntensity: 3.0,
+  hdrBgExposure: 1.55,
+  hdrEnvIntensity: 1.15,
+  fallbackHdrBgExposure: 1.85,
+  fallbackHdrEnvIntensity: 1.05,
+  defaultSkyEnvIntensity: 0.85,
+  glassEnvMapIntensity: 1.25,
+};
+
 /**@classdesc 定位子系统，包含场景，子系统特有的功能，用于主系统和子系统的切换（包含主场景和子场景切换） */
 export class IndoorSubsystem extends CustomSystem {
   constructor(core) {
@@ -71,6 +87,9 @@ export class IndoorSubsystem extends CustomSystem {
 
   async onEnter(buildingName) {
     // 注意：clearIndoorData 现在在 changeSystemCommon 中处理，避免重复清理
+
+    this._prevToneMappingExposure = this.core.renderer.toneMappingExposure;
+    this.core.renderer.toneMappingExposure = INDOOR_BRIGHTNESS.rendererExposure;
 
     if (this.core.ground && this.core.ground.hideAllBuildingLabel) {
       this.core.ground.hideAllBuildingLabel();
@@ -414,8 +433,8 @@ export class IndoorSubsystem extends CustomSystem {
       const cameraDistance = radius * 2; // 相机距离为半径的2倍
       position = new THREE.Vector3(
         center.x,
-        center.y + cameraDistance * 0.8,
-        center.z - cameraDistance * 1.2
+        center.y + 8,
+        center.z + cameraDistance * 1.2
       );
 
       this.tweenControl.changeTo({
@@ -504,7 +523,7 @@ export class IndoorSubsystem extends CustomSystem {
       const position = new THREE.Vector3(
         center.x,
         center.y + floorHeight + cameraDistance * 1.2,
-        center.z - cameraDistance
+        center.z + cameraDistance
       );
 
       this.tweenControl.changeTo({
@@ -532,6 +551,11 @@ export class IndoorSubsystem extends CustomSystem {
   }
 
   onLeave() {
+    if (this._prevToneMappingExposure !== undefined) {
+      this.core.renderer.toneMappingExposure = this._prevToneMappingExposure;
+      this._prevToneMappingExposure = undefined;
+    }
+
     if (this.core.ground && this.core.ground.showAllBuildingLabel) {
       this.core.ground.showAllBuildingLabel();
     }
@@ -1096,12 +1120,12 @@ export class IndoorSubsystem extends CustomSystem {
       (texture) => {
         texture.mapping = THREE.EquirectangularReflectionMapping;
         texture.colorSpace = THREE.SRGBColorSpace;
-        texture.exposure = 1.5;
+        texture.exposure = INDOOR_BRIGHTNESS.hdrBgExposure;
 
         this.scene.background = texture;
 
         const envTexture = texture.clone();
-        envTexture.intensity = 1.2;
+        envTexture.intensity = INDOOR_BRIGHTNESS.hdrEnvIntensity;
         this.scene.environment = envTexture;
 
         this.processIndoorEnvMapMaterials();
@@ -1126,12 +1150,12 @@ export class IndoorSubsystem extends CustomSystem {
       (texture) => {
         texture.mapping = THREE.EquirectangularReflectionMapping;
         texture.colorSpace = THREE.SRGBColorSpace;
-        texture.exposure = 1.8;
+        texture.exposure = INDOOR_BRIGHTNESS.fallbackHdrBgExposure;
 
         this.scene.background = texture;
 
         const envTexture = texture.clone();
-        envTexture.intensity = 1.0;
+        envTexture.intensity = INDOOR_BRIGHTNESS.fallbackHdrEnvIntensity;
         this.scene.environment = envTexture;
 
         this.processIndoorEnvMapMaterials();
@@ -1169,7 +1193,7 @@ export class IndoorSubsystem extends CustomSystem {
     this.scene.background = texture;
 
     const envTexture = texture.clone();
-    envTexture.intensity = 0.8;
+    envTexture.intensity = INDOOR_BRIGHTNESS.defaultSkyEnvIntensity;
     this.scene.environment = envTexture;
   }
 
@@ -1197,7 +1221,7 @@ export class IndoorSubsystem extends CustomSystem {
     if (material.isMeshStandardMaterial || material.isMeshPhysicalMaterial) {
       if (this.scene.environment) {
         material.envMap = this.scene.environment;
-        material.envMapIntensity = 3.2;
+        material.envMapIntensity = INDOOR_BRIGHTNESS.envMapIntensity;
       } else {
         material.envMapIntensity = 0;
       }
@@ -1222,7 +1246,7 @@ export class IndoorSubsystem extends CustomSystem {
 
         // 为材质设置环境贴图
         material.envMap = texture;
-        material.envMapIntensity = 1.2; // 环境贴图强度
+        material.envMapIntensity = INDOOR_BRIGHTNESS.glassEnvMapIntensity;
         material.needsUpdate = true;
 
         console.log(
@@ -1242,7 +1266,7 @@ export class IndoorSubsystem extends CustomSystem {
         // 如果加载失败，使用场景的环境贴图作为备用
         if (this.scene.environment) {
           material.envMap = this.scene.environment;
-          material.envMapIntensity = 1.2;
+          material.envMapIntensity = INDOOR_BRIGHTNESS.glassEnvMapIntensity;
           material.needsUpdate = true;
           console.log("室内材质 bl 使用场景环境贴图作为备用");
         }
@@ -1470,12 +1494,18 @@ export class IndoorSubsystem extends CustomSystem {
     const maxDimension = Math.max(buildingWidth, buildingHeight, buildingDepth);
 
     // 创建环境光
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1);
+    const ambientLight = new THREE.AmbientLight(
+      0xffffff,
+      INDOOR_BRIGHTNESS.ambient
+    );
     this.ambientLight = ambientLight;
     this._add(this.ambientLight);
 
     // 创建主方向光，位置设置在包围盒最高点上方
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    const directionalLight = new THREE.DirectionalLight(
+      0xffffff,
+      INDOOR_BRIGHTNESS.directional
+    );
 
     // 设置方向光位置在包围盒最高点上方
     const lightHeight = max.y + maxDimension * 0.5; // 在最高点上方一定距离
@@ -1529,7 +1559,10 @@ export class IndoorSubsystem extends CustomSystem {
 
     // 创建四个方向的辅助灯光
     lightPositions.forEach((position, index) => {
-      const auxiliaryLight = new THREE.DirectionalLight(0xffffff, 0.3);
+      const auxiliaryLight = new THREE.DirectionalLight(
+        0xffffff,
+        INDOOR_BRIGHTNESS.auxiliary
+      );
       auxiliaryLight.position.copy(position);
 
       // 设置灯光朝向建筑中心
@@ -1562,7 +1595,10 @@ export class IndoorSubsystem extends CustomSystem {
     });
 
     // 创建探照灯（建筑正面斜上方）
-    const spotlight = new THREE.SpotLight(0xffffff, 0.8);
+    const spotlight = new THREE.SpotLight(
+      0xffffff,
+      INDOOR_BRIGHTNESS.spotlight
+    );
 
     // 设置探照灯位置在建筑正面斜上方
     const spotlightDistance = maxDimension * 1.2; // 探照灯距离建筑的距离

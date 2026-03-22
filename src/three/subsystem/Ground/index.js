@@ -1681,9 +1681,9 @@ string} name
     center.y += radius * 0.24;
 
     const finalCameraPosition = new THREE.Vector3(
-      center.x - radius * 1.6,
+      center.x,
       center.y + 4,
-      center.z - radius * 1
+      center.z+radius*2.5
     );
     const controlsTarget = center.clone();
 
