@@ -24,7 +24,3 @@ dist.*
 *.sln
 *.sw?
 *.rar
-
-# Large assets — exceed GitHub 100MB limit; keep locally or use Git LFS
-public/models/GLB/GLB/内部地形.glb
-public/models/outDoor/内地形.glb
