@@ -1,5 +1,5 @@
 // 这个文件是自动生成的，请勿手动修改
-// 生成时间: 2026/4/19 12:56:10
+// 生成时间: 2026/4/19 20:35:58
 export const modelFiles = [
   "其他模型.glb",
   "内地形.glb",
@@ -31,8 +31,7 @@ export const indoorModelFiles = [
   "A01B016.glb",
   "A01B017.glb",
   "A01B018.glb",
-  "A01B019.glb",
-  "A01B020.glb"
+  "A01B019.glb"
 ];
 
 // 室内模型对应的建筑名称列表
@@ -55,6 +54,5 @@ export const buildingNames = [
   "A01B016",
   "A01B017",
   "A01B018",
-  "A01B019",
-  "A01B020"
+  "A01B019"
 ];

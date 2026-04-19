@@ -664,6 +664,47 @@ string} name
       // 为建筑模型添加探照灯光和点光源，模拟玻璃光照效果
       this.addBuildingLighting(model);
     }
+    if (name === "树") {
+      // 树的加载以及实例化加载挪至 onLoaded之后
+      function setTreeAttribute(ins) {
+        if (!ins.isMesh) return;
+        ins.castShadow = true;
+        ins.material.transparent = true;
+        ins.material.side = THREE.DoubleSide;
+        ins.material.alphaTest = 0.4;
+        // ins.material.forceSinglePass = true;
+        ins.material.roughness = 0.8;
+      }
+
+      this.instancedMesh.push(
+        this.loadInstancedModel(
+          model.children,
+          setTreeAttribute,
+          [0.95, 1.05],
+          true,
+        ),
+      );
+    }
+    if (name === "路灯") {
+      function setAttribute(ins) {
+        if (!ins.isMesh) return;
+        ins.castShadow = true;
+        ins.receiveShadow = true;
+      }
+      this.instancedMesh.push(
+        this.loadInstancedModel(model.children, setAttribute),
+      );
+    } 
+    if (name === "车") {
+      function setAttribute(ins) {
+        if (!ins.isMesh) return;
+        ins.castShadow = true;
+        ins.receiveShadow = true;
+      }
+      this.instancedMesh.push(
+        this.loadInstancedModel(model.children, setAttribute),
+      );
+    } 
     // 动画现在由全局动画管理器统一处理
 
     this._add(model);
@@ -1596,8 +1637,10 @@ string} name
   /**
    * @param {THREE.Object3D} model
    * @param {()=>void} setAttribute 设置属性
+   * @param {number|number[]|undefined} scale
+   * @param {boolean} [hideTreeZuobiaoMarkers] 树：隐藏 zuobiao 里仅用于采样的白色面片，只保留实例化树
    */
-  loadInstancedModel(model, setAttribute, scale) {
+  loadInstancedModel(model, setAttribute, scale, hideTreeZuobiaoMarkers) {
     const group = new THREE.Group();
 
     const instanceMap = {};
@@ -1616,6 +1659,14 @@ string} name
       // child.getWorldDirection(v);
       instanceRotationMap[key] = instanceRotationMap[key] || [];
       instanceRotationMap[key].push(child.rotation);
+
+      if (hideTreeZuobiaoMarkers) {
+        const isTreePlacement =
+          key.indexOf("shu") !== -1 || child.name.includes("zuobiao_shu");
+        if (isTreePlacement) {
+          child.visible = false;
+        }
+      }
     }
 
     model.forEach((group) => {
@@ -1638,6 +1689,8 @@ string} name
             });
           }
         });
+        // 仅作实例化模板，不随 model 一起显示在场景中
+        group.visible = false;
       }
     });
 
