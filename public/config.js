@@ -1,5 +1,7 @@
 /** Global Configs */
 window.configs = {
+  /** 门锁接口（开发环境由 vite 代理到 jetlinks，见 vite.config.js） */
+  smartLockApiBase: "/api/smart-lock",
   websocket: "ws://172.23.57.52:9999/gis/gis/websocket/client", //人员定位数据websocket地址
   floorToName: {
     "1楼_室内": {

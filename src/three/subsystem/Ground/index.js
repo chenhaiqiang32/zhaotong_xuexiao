@@ -704,7 +704,10 @@ string} name
       this.instancedMesh.push(
         this.loadInstancedModel(model.children, setAttribute),
       );
-    } 
+    }
+    if (name === "设备") {
+     
+    }
     // 动画现在由全局动画管理器统一处理
 
     this._add(model);
