@@ -83,6 +83,9 @@ export class IndoorSubsystem extends CustomSystem {
     // 保存首次进入时的相机位置
     this.initialCameraPosition = null;
     this.initialControlsTarget = null;
+
+    /** 当前选中的设备 CSS2D（门锁等） */
+    this._selectedDeviceIconLabel = null;
   }
 
   async onEnter(buildingName) {
@@ -422,6 +425,14 @@ export class IndoorSubsystem extends CustomSystem {
 
     this.cameraMove(this.building);
     this.addEventListener();
+
+    // 室外设备.glb 上的门锁等 CSS2D 需挂到室内 scene，否则当前渲染室内时标签不显示
+    if (
+      this.core.ground &&
+      typeof this.core.ground.mountDeviceIconsToIndoorScene === "function"
+    ) {
+      this.core.ground.mountDeviceIconsToIndoorScene(this.scene);
+    }
   }
   cameraMove(group, startPosition = null) {
     return new Promise((res, rej) => {
@@ -559,6 +570,8 @@ export class IndoorSubsystem extends CustomSystem {
     if (this.core.ground && this.core.ground.showAllBuildingLabel) {
       this.core.ground.showAllBuildingLabel();
     }
+    this.syncGroundDeviceIconVisibility(null);
+    this.clearDeviceIconSelection();
     this.resetControls();
 
     if (this.sceneHint) {
@@ -605,6 +618,82 @@ export class IndoorSubsystem extends CustomSystem {
     this.gatherOrSilentData = {};
     this.disPoseGatherShader();
   }
+
+  /**
+   * 室外「设备.glb」上 CSS2D 图标的楼层键与室内 `changeFloor(floor)` 的 floor 一致时（均为楼层节点名，如 A01B001F03），
+   * 仅显示当前楼层对应图标，其余隐藏。离开室内时可传 null 全部隐藏。
+   * @param {string|null|undefined} floorKey
+   */
+  syncGroundDeviceIconVisibility(floorKey) {
+    if (
+      this.core.ground &&
+      typeof this.core.ground.setDeviceIconVisibilityForFloor === "function"
+    ) {
+      this.core.ground.setDeviceIconVisibilityForFloor(floorKey);
+    }
+  }
+
+  clearDeviceIconSelection() {
+    const el = this._selectedDeviceIconLabel?.element;
+    if (el) {
+      el.classList.remove("web3d-device-icon--selected");
+    }
+    this._selectedDeviceIconLabel = null;
+  }
+
+  /**
+   * 视角拉近到设备 CSS2D 标签，并加上选中样式（依赖当前已在目标楼层且标签已挂到室内 scene）。
+   * @param {import("three/examples/jsm/renderers/CSS2DRenderer").CSS2DObject} label
+   */
+  focusDeviceIconLabel(label) {
+    this.clearDeviceIconSelection();
+    if (!label || !label.element) return;
+
+    this._selectedDeviceIconLabel = label;
+    label.element.classList.add("web3d-device-icon--selected");
+    label.visible = true;
+
+    if (this.currentFloor?.name) {
+      this.syncGroundDeviceIconVisibility(this.currentFloor.name);
+    }
+
+    const wp = new THREE.Vector3();
+    label.getWorldPosition(wp);
+
+    let radius = 40;
+    if (this.currentFloor) {
+      const box = new THREE.Box3().setFromObject(this.currentFloor);
+      const size = box.getSize(new THREE.Vector3());
+      radius = Math.max(size.x, size.z, 20) * 0.5;
+    }
+    const dist = Math.max(radius * 0.9, 14);
+    const endPos = new THREE.Vector3(
+      wp.x + dist * 0.55,
+      wp.y + dist * 0.42,
+      wp.z + dist * 0.55
+    );
+
+    this.tweenControl.changeTo({
+      start: this.camera.position,
+      end: endPos,
+      duration: 1100,
+      onComplete: () => {
+        this.controls.enable = true;
+      },
+      onStart: () => {
+        this.controls.enable = false;
+      },
+    });
+    this.tweenControl.changeTo({
+      start: this.controls.target,
+      end: wp,
+      duration: 1100,
+      onUpdate: () => {
+        this.controls.update();
+      },
+    });
+  }
+
   changeFloor(floor) {
     return new Promise((resolve, reject) => {
       if (!this.buildingObject || !this.buildingObject[floor]) {
@@ -612,6 +701,8 @@ export class IndoorSubsystem extends CustomSystem {
         reject(new Error(`楼层 "${floor}" 的建筑数据尚未加载完成`));
         return;
       }
+
+      this.clearDeviceIconSelection();
 
       if (!this.endChangeFloor) {
         reject(new Error("楼层切换正在进行中"));
@@ -625,6 +716,7 @@ export class IndoorSubsystem extends CustomSystem {
         this.endChangeFloor
       ) {
         console.log(`已经在目标楼层 ${floor}，无需切换`);
+        this.syncGroundDeviceIconVisibility(floor);
         resolve();
         return;
       }
@@ -665,6 +757,9 @@ export class IndoorSubsystem extends CustomSystem {
 
             // 显示当前楼层的标签
             this.showFloorLabels(floor);
+
+            // 室外设备模型：仅当前楼层 CSS2D 图标可见
+            this.syncGroundDeviceIconVisibility(floor);
 
             // 从存储的数据中检索并应用设计数据
             this.applyStoredDesignData(floor);
@@ -872,6 +967,9 @@ export class IndoorSubsystem extends CustomSystem {
           // 显示当前楼层的标签
           this.showFloorLabels(target);
 
+          // 室外设备模型：仅当前楼层 CSS2D 图标可见
+          this.syncGroundDeviceIconVisibility(target);
+
           // 从存储的数据中检索并应用设计数据
           this.applyStoredDesignData(target);
 
@@ -906,6 +1004,10 @@ export class IndoorSubsystem extends CustomSystem {
     });
   }
   resetBuilding() {
+    this.clearDeviceIconSelection();
+    // 退出单层视角回到整栋楼：隐藏挂到室内场景的设备 CSS2D（门锁等）
+    this.syncGroundDeviceIconVisibility(null);
+
     lightIndexUpdate();
     Reflect.ownKeys(this.buildingObject).forEach((key) => {
       this.buildingObject[key].group.visible = true;
@@ -1329,6 +1431,13 @@ export class IndoorSubsystem extends CustomSystem {
    */
   clearIndoorData() {
     console.log("开始清理室内系统数据...");
+
+    if (
+      this.core.ground &&
+      typeof this.core.ground.detachDeviceIconsFromIndoorScene === "function"
+    ) {
+      this.core.ground.detachDeviceIconsFromIndoorScene();
+    }
 
     this.removeEventListener();
     this.resetData();
@@ -2786,6 +2895,7 @@ export class IndoorSubsystem extends CustomSystem {
         this.endChangeFloor
       ) {
         console.log(`已经在目标楼层 ${floor}，无需切换`);
+        this.syncGroundDeviceIconVisibility(floor);
         resolve();
         return;
       }
@@ -2822,6 +2932,8 @@ export class IndoorSubsystem extends CustomSystem {
 
             // 显示当前楼层的标签
             this.showFloorLabels(floor);
+
+            this.syncGroundDeviceIconVisibility(floor);
 
             // 从存储的数据中检索并应用设计数据
             this.applyStoredDesignData(floor);
@@ -2902,6 +3014,9 @@ export class IndoorSubsystem extends CustomSystem {
 
           // 显示当前楼层的标签
           this.showFloorLabels(target);
+
+          // 室外设备模型：仅当前楼层 CSS2D 图标可见
+          this.syncGroundDeviceIconVisibility(target);
 
           // 从存储的数据中检索并应用设计数据
           this.applyStoredDesignData(target);

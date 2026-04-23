@@ -10,7 +10,11 @@ import {
 } from "three";
 import { Lake } from "../../lib/blMeshes";
 import { Subsystem } from "../subsystem";
-import { water2Material } from "../../shader/material";
+import {
+  water2Material,
+  waterSurfaceMaterial,
+  updateWaterSurfaceEnvFromScene,
+} from "../../shader/material";
 import {
   edgeFadeDis,
   brighten,
@@ -181,6 +185,7 @@ function autoRotate(system) {
 
 
 const water2 = water2Material();
+const waterSurface = waterSurfaceMaterial();
 
 /**
  * 处理通用模型
@@ -189,7 +194,7 @@ const water2 = water2Material();
  */
 
 
-function commonProcess(child,system) {
+function commonProcess(child,system,modelName) {
 
   const renderQueue = system.onRenderQueue || system.core.onRenderQueue;
 
@@ -217,11 +222,14 @@ function commonProcess(child,system) {
 
     renderQueue.set(Symbol(),lake.update.bind(lake));
     system.add(mesh);
+  } else if (modelName === "内地形" && material.name === "JD-101") {
+    child.material = waterSurface;
+    child.onBeforeRender = (renderer, scene, camera) => {
+      waterSurface.uniforms.uCameraWorld.value.copy(camera.position);
+      updateWaterSurfaceEnvFromScene(waterSurface, scene);
+    };
   } else if (material.name.includes("水")) {
-
     child.material = water2;
-    // console.log(child);
-
   }
 
   if (material.name.includes("漆面")) {

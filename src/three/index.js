@@ -221,6 +221,70 @@ export class Store3D extends CoreExtensions {
       this.changeFloor(floor);
     });
   }
+
+  /**
+   * 从楼层节点名解析楼栋名（如 A01B001F03 -> A01B001），对应 models/inDoor/{楼栋}.glb
+   */
+  static extractBuildingFromFloorKey(floorFullName) {
+    const s = String(floorFullName);
+    const m = s.match(/^(.+)(F\d{2})$/i);
+    if (m) return m[1];
+    return s;
+  }
+
+  waitUntilIndoorFloorReady(floorFullName, timeoutMs = 60000) {
+    const indoor = this.indoorSubsystem;
+    const deadline = Date.now() + timeoutMs;
+    return new Promise((resolve, reject) => {
+      const tick = () => {
+        if (
+          indoor.building &&
+          indoor.buildingObject &&
+          indoor.buildingObject[floorFullName]
+        ) {
+          resolve();
+        } else if (Date.now() > deadline) {
+          reject(new Error(`室内楼层 ${floorFullName} 未就绪`));
+        } else {
+          setTimeout(tick, 100);
+        }
+      };
+      tick();
+    });
+  }
+
+  /**
+   * 进入指定楼栋并切换到楼层（不依赖 window.floorToName，供设备搜索等按「完整楼层名」导航）
+   */
+  async enterIndoorAndFloor(buildingName, floorFullName) {
+    const indoor = this.indoorSubsystem;
+    if (this.currentSystem === indoor && indoor.buildingName === buildingName) {
+      await indoor.changeFloor(floorFullName);
+      return;
+    }
+    await this.changeSystem("indoorSubsystem", buildingName);
+    await this.waitUntilIndoorFloorReady(floorFullName);
+    await indoor.changeFloor(floorFullName);
+  }
+
+  /**
+   * 按设备类型（如 mensuo）与设备编号搜索室外设备索引，进入对应楼层并拉近视角、选中样式
+   */
+  async focusDeviceByTypeAndId(deviceType, deviceId) {
+    const found = this.ground.findDeviceIconByTypeAndId(deviceType, deviceId);
+    if (!found) {
+      console.warn(
+        `[focusDeviceByTypeAndId] 未找到设备 type=${deviceType} id=${deviceId}`
+      );
+      return false;
+    }
+    const { floor, label } = found;
+    const buildingName = Store3D.extractBuildingFromFloorKey(floor);
+    await this.enterIndoorAndFloor(buildingName, floor);
+    this.indoorSubsystem.focusDeviceIconLabel(label);
+    return true;
+  }
+
   clearFence() {
     if (this.currentSystem && this.currentSystem.clearFence) {
       this.currentSystem.clearFence();

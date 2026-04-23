@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { Store3D } from "../..";
 import { getCurrentPosition } from "./personCommon";
 import { Orientation3D } from "./Orientation3D";
 import { Cluster } from "./Cluster";
@@ -39,7 +38,7 @@ export class Orientation {
   }
 
   /**
-   * @param {Store3D} core
+   * @param {import('../../index').Store3D} core
    */
   constructor(core) {
     this.core = core;

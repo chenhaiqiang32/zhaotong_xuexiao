@@ -14,9 +14,52 @@
   <script type="module" src="/config.js"></script>
 
   <script type="module" src="/src/main.js"></script>
+  <div class="web3d-device-search-panel" id="web3dDeviceSearchPanel" title="按室外设备索引定位（与设备.glb 中类型/编号一致）">
+    <label>设备类型
+      <input type="text" id="web3dDeviceType" value="mensuo" placeholder="如 mensuo" autocomplete="off" />
+    </label>
+    <label>设备编号
+      <input type="text" id="web3dDeviceId" placeholder="如 80A036AE6EF3" autocomplete="off" />
+    </label>
+    <button type="button" id="web3dDeviceSearchBtn">定位设备</button>
+  </div>
   <div class="statusBoard" id="statusBoard" style="display: none;">
     暂无
   </div>
+  <script type="module">
+    function bindDeviceSearchUi() {
+      const btn = document.getElementById("web3dDeviceSearchBtn");
+      const typeEl = document.getElementById("web3dDeviceType");
+      const idEl = document.getElementById("web3dDeviceId");
+      if (!btn || !typeEl || !idEl) return;
+      btn.addEventListener("click", async () => {
+        const deviceType = (typeEl.value || "mensuo").trim();
+        const deviceId = (idEl.value || "").trim();
+        if (!deviceId) {
+          alert("请填写设备编号");
+          return;
+        }
+        const core = window.Core;
+        if (!core || typeof core.focusDeviceByTypeAndId !== "function") {
+          console.warn("Store3D 尚未就绪");
+          return;
+        }
+        try {
+          const ok = await core.focusDeviceByTypeAndId(deviceType, deviceId);
+          if (!ok) alert("未找到该设备，请核对类型与编号");
+        } catch (e) {
+          console.error(e);
+          alert(e?.message || "定位失败");
+        }
+      });
+    }
+    const t = setInterval(() => {
+      if (window.Core) {
+        clearInterval(t);
+        bindDeviceSearchUi();
+      }
+    }, 200);
+  </script>
 </body>
 <style>
   .statusBoard {

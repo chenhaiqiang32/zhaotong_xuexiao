@@ -23,7 +23,7 @@ export function modelProcess(mesh,modelName,system) {
   if (mesh.isMesh) {
 
     process(mesh,modelName,system);
-    commonProcess(mesh,system);
+    commonProcess(mesh,system,modelName);
   }
 }
 

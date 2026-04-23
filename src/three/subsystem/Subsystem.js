@@ -1,4 +1,3 @@
-import { Store3D } from "..";
 import { GridHelper,AxesHelper } from "three";
 import { SubScene } from "../../three/scene/SubScene";
 
@@ -6,7 +5,7 @@ import { SubScene } from "../../three/scene/SubScene";
 export class Subsystem {
 
   /**
-   * @param {Store3D} core
+   * @param {import('../index').Store3D} core
    */
   constructor(core) {
     this.core = core;

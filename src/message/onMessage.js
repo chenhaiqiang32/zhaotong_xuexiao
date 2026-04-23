@@ -362,6 +362,16 @@ export const onMessage = async () => {
           core.changeIndoor(event.data.param);
           break;
         }
+        case "focusDeviceBySearch": {
+          const p = event.data.param || {};
+          const { deviceType = "mensuo", deviceId } = p;
+          if (!deviceId) {
+            console.warn("focusDeviceBySearch 需要 param.deviceId");
+            break;
+          }
+          void core.focusDeviceByTypeAndId(deviceType, String(deviceId));
+          break;
+        }
         case "goBack": {
           core.changeSystem("ground");
 
