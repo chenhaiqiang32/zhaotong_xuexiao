@@ -39,6 +39,7 @@ import { Tooltip } from "../../components/Tooltip";
 import { SceneHint } from "../../components/SceneHint";
 import { BuildingHoverRings } from "../../../lib/BuildingHoverRings";
 import { glassEffect } from "../../../shader";
+import { smartLockPage } from "../../../api/smartLock";
 
 // 获取模型文件列表
 async function getModelFiles() {
@@ -145,6 +146,11 @@ export class Ground extends CustomSystem {
     // 扁平索引：floor__type__deviceId -> { floor, type, deviceId, label }
     this.deviceIconIndex = {};
     this.deviceIconIndexByDeviceId = {};
+
+    // 门锁数据（uuid -> lockInfo，接口1）
+    this.smartLockMap = {};
+    /** @type {Promise<void> | null} */
+    this._smartLockInitPromise = null;
 
     this.init();
   }
@@ -558,10 +564,13 @@ export class Ground extends CustomSystem {
       worldPos.y += 2;
       label.userData.deviceIconWorldPos = worldPos.clone();
       label.userData.deviceIconFloor = floor;
+      label.userData.deviceIconType = type;
+      label.userData.deviceIconDeviceId = deviceId;
 
       dom.style.pointerEvents = "auto";
       dom.style.cursor = "pointer";
-      dom.addEventListener("click", (e) => {
+      const onPointerActivate = (e) => {
+        e.preventDefault();
         e.stopPropagation();
         const indoor = this.core?.indoorSubsystem;
         if (!indoor || typeof indoor.focusDeviceIconLabel !== "function") return;
@@ -579,7 +588,9 @@ export class Ground extends CustomSystem {
               indoor.focusDeviceIconLabel(label);
             });
         }
-      });
+      };
+      // 用 capture 优先于 OrbitControls，避免点图标被误当成对场景的拖动
+      dom.addEventListener("pointerup", onPointerActivate, { capture: true });
 
       ensureStore(floor, type)[deviceId] = label;
       this.deviceIconIndex[indexKey] = { floor, type, deviceId, label };
@@ -1640,6 +1651,33 @@ string} name
       }
       super.updateOrientation();
     }); // 镜头动画结束后执行事件绑定
+
+    // 初始化门锁数据（接口暂不可用：自动回退 mock）
+    void this.initSmartLockData();
+  }
+
+  initSmartLockData() {
+    if (this._smartLockInitPromise) {
+      return this._smartLockInitPromise;
+    }
+    this._smartLockInitPromise = (async () => {
+      try {
+        const lockRes = await smartLockPage({ pageNum: 1, pageSize: 9999 });
+        const list = lockRes?.result?.data?.list || [];
+        list.forEach((item) => {
+          if (item?.uuid) this.smartLockMap[String(item.uuid)] = item;
+        });
+      } catch (e) {
+        console.warn("initSmartLockData failed:", e);
+        this._smartLockInitPromise = null;
+        throw e;
+      }
+    })();
+    return this._smartLockInitPromise;
+  }
+
+  getSmartLockInfoByUuid(uuid) {
+    return this.smartLockMap?.[String(uuid)] || null;
   }
 
   /**

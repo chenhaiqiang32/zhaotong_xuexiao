@@ -1,0 +1,54 @@
+{
+  "message": "success",
+  "result": {
+    "code": "200",
+    "message": "操作成功",
+    "data": {
+      "total": 3,
+      "list": [
+        {
+          "id": 1005,
+          "mac": "80A036AE3805",
+          "name": "A慎行楼206锁",
+          "apartmentName": "慎行楼",
+          "floorName": "2F",
+          "roomName": "206室",
+          "uuid": "80A036AE3805",
+          "status": 1,
+          "battery": 100,
+          "firmwareVersion": "V20:R6.00.9.52"
+        },
+        {
+          "id": 1006,
+          "mac": "80A036AE6EF3",
+          "name": "A笃行楼202锁",
+          "apartmentName": "笃行楼",
+          "floorName": "2F",
+          "roomName": "202室",
+          "uuid": "80A036AE6EF3",
+          "status": 2,
+          "battery": 72,
+          "firmwareVersion": "V20:R6.00.9.52"
+        },
+        {
+          "id": 1007,
+          "mac": "047863CA6E36",
+          "name": "A敏行楼203锁",
+          "apartmentName": "敏行楼",
+          "floorName": "3F",
+          "roomName": "203室",
+          "uuid": "047863CA6E36",
+          "status": 1,
+          "battery": 88,
+          "firmwareVersion": "V20:R6.00.9.52"
+        }
+      ],
+      "pageNum": 1,
+      "pageSize": 9999,
+      "pages": 1
+    }
+  },
+  "status": 200,
+  "timestamp": 1776058639604
+}
+

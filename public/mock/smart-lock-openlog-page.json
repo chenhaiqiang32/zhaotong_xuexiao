@@ -1,0 +1,116 @@
+{
+  "message": "success",
+  "result": {
+    "code": "200",
+    "message": "操作成功",
+    "data": {
+      "total": 9,
+      "list": [
+        {
+          "name": "赵一楠",
+          "cardCode": "1574738263",
+          "lockName": "A笃行楼202锁",
+          "apartmentName": "笃行楼",
+          "floorName": "2F",
+          "roomName": "202室",
+          "operation": "开锁",
+          "operTime": "2026-01-06 16:55:36",
+          "uuid": "80A036AE6EF3"
+        },
+        {
+          "name": "李二",
+          "cardCode": "928374612",
+          "lockName": "A笃行楼202锁",
+          "apartmentName": "笃行楼",
+          "floorName": "2F",
+          "roomName": "202室",
+          "operation": "关锁",
+          "operTime": "2026-01-06 18:02:11",
+          "uuid": "80A036AE6EF3"
+        },
+        {
+          "name": "周七",
+          "cardCode": "100110011",
+          "lockName": "A笃行楼202锁",
+          "apartmentName": "笃行楼",
+          "floorName": "2F",
+          "roomName": "202室",
+          "operation": "开锁",
+          "operTime": "2026-01-12 08:30:00",
+          "uuid": "80A036AE6EF3"
+        },
+        {
+          "name": "王三",
+          "cardCode": "000112233",
+          "lockName": "A慎行楼206锁",
+          "apartmentName": "慎行楼",
+          "floorName": "2F",
+          "roomName": "206室",
+          "operation": "开锁",
+          "operTime": "2026-01-08 09:16:02",
+          "uuid": "80A036AE3805"
+        },
+        {
+          "name": "刘四",
+          "cardCode": "5566778899",
+          "lockName": "A慎行楼206锁",
+          "apartmentName": "慎行楼",
+          "floorName": "2F",
+          "roomName": "206室",
+          "operation": "关锁",
+          "operTime": "2026-01-10 20:10:00",
+          "uuid": "80A036AE3805"
+        },
+        {
+          "name": "陈五",
+          "cardCode": "3344556677",
+          "lockName": "A慎行楼206锁",
+          "apartmentName": "慎行楼",
+          "floorName": "2F",
+          "roomName": "206室",
+          "operation": "开锁",
+          "operTime": "2026-01-11 14:22:00",
+          "uuid": "80A036AE3805"
+        },
+        {
+          "name": "赵一楠",
+          "cardCode": "1574738263",
+          "lockName": "A敏行楼203锁",
+          "apartmentName": "敏行楼",
+          "floorName": "3F",
+          "roomName": "203室",
+          "operation": "开锁",
+          "operTime": "2026-02-01 11:20:18",
+          "uuid": "047863CA6E36"
+        },
+        {
+          "name": "孙六",
+          "cardCode": "2233445566",
+          "lockName": "A敏行楼203锁",
+          "apartmentName": "敏行楼",
+          "floorName": "3F",
+          "roomName": "203室",
+          "operation": "关锁",
+          "operTime": "2026-02-01 19:00:00",
+          "uuid": "047863CA6E36"
+        },
+        {
+          "name": "赵一楠",
+          "cardCode": "1574738263",
+          "lockName": "A敏行楼203锁",
+          "apartmentName": "敏行楼",
+          "floorName": "3F",
+          "roomName": "203室",
+          "operation": "开锁",
+          "operTime": "2026-02-02 10:15:00",
+          "uuid": "047863CA6E36"
+        }
+      ],
+      "pageNum": 1,
+      "pageSize": 12,
+      "pages": 1
+    }
+  },
+  "status": 200,
+  "timestamp": 1776058649842
+}

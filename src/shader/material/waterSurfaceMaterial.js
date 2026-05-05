@@ -32,24 +32,28 @@ export function waterSurfaceMaterial() {
       sunDirection: { value: new THREE.Vector3(0.45, 0.88, 0.28).normalize() },
       sunColor: { value: new THREE.Color(0xffffff) },
       /** 清澈：浅水极亮、深水仍偏亮青绿，避免浑浊 */
-      waterShallow: { value: new THREE.Color(0xbfe9ff) },
-      waterDeep: { value: new THREE.Color(0x2f86ff) },
-      skyFresnel: { value: new THREE.Color(0xf0fbff) },
+      waterShallow: { value: new THREE.Color(0x2f7dff) },
+      waterDeep: { value: new THREE.Color(0x02102a) },
+      skyFresnel: { value: new THREE.Color(0x9fd9ff) },
       envMapCube: { value: null },
       envMap2D: { value: null },
-      envIntensity: { value: 1.12 },
-      envReflectMix: { value: 0.86 },
+      envIntensity: { value: 1.3 },
+      envReflectMix: { value: 0.92 },
       /** 垂直视角下仍带一点天光，更像通透水面 */
-      envBaseLift: { value: 0.38 },
+      envBaseLift: { value: 0.26 },
       /** 越小波纹越大（世界坐标乘数） */
       size: { value: 0.92 },
       distortionScale: { value: 0.48 },
-      alpha: { value: 0.58 },
+      alpha: { value: 0.68 },
       /** Shadertoy 风格 Voronoi 水面：世界尺度与混入强度 */
       /** 越小 Voronoi 斑块越大 */
       voronoiScale: { value: 0.055 },
-      voronoiBlend: { value: 0.42 },
-      voronoiBg: { value: new THREE.Vector3(0.18, 0.62, 0.98) },
+      voronoiBlend: { value: 0.18 },
+      voronoiBg: { value: new THREE.Vector3(0.02, 0.06, 0.22) },
+      /** 波光粼粼闪点强度 */
+      sparkleIntensity: { value: 0.95 },
+      /** 闪点尺度（越大越细碎） */
+      sparkleScale: { value: 3.6 },
     },
   });
   mat.userData.envMode = "fallback";
@@ -149,6 +153,8 @@ uniform float envBaseLift;
 uniform float voronoiScale;
 uniform float voronoiBlend;
 uniform vec3 voronoiBg;
+uniform float sparkleIntensity;
+uniform float sparkleScale;
 
 varying vec3 vWorldPosition;
 varying vec3 vWorldNormal;
@@ -267,7 +273,13 @@ void main() {
 
   vec3 sunTint = vec3(0.55, 0.88, 0.96);
   body += diffuseLight * sunTint * 0.22;
-  body += specularLight * vec3(1.0, 1.0, 1.0) * 1.15;
+  body += specularLight * vec3(1.0, 1.0, 1.0) * 1.35;
+
+  // 波光粼粼：用更高频的噪声 + 菲涅尔/高光门控生成闪点
+  vec4 n2 = getNoise(vWorldPosition.xz * (size * sparkleScale) + vec2(uTime * 0.9, -uTime * 0.7));
+  float sparkle = pow(clamp(n2.x * 0.5 + 0.5, 0.0, 1.0), 10.0);
+  sparkle *= pow(fresnel, 0.6) * (0.35 + 0.65 * clamp(specularLight.r, 0.0, 1.0));
+  body += vec3(0.65, 0.85, 1.0) * sparkle * sparkleIntensity;
 
   float v = voronoiWater(vWorldPosition.xz, uTime);
   vec3 proc = voronoiBg + vec3(v);

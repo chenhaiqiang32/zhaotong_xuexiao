@@ -16,6 +16,7 @@ import BoxModel from "../../../lib/boxModel";
 import { dynamicFade, fadeByTime } from "../../../shader";
 import { SceneHint } from "../../components/SceneHint";
 import { equipmentTreeManager } from "./equipmentTreeManager";
+import { smartLockOpenLogPage } from "../../../api/smartLock";
 
 /**@type {OrbitControls} */
 const controlsParameters = {
@@ -86,6 +87,9 @@ export class IndoorSubsystem extends CustomSystem {
 
     /** 当前选中的设备 CSS2D（门锁等） */
     this._selectedDeviceIconLabel = null;
+
+    this._smartLockInfoCss2d = null;
+    this._smartLockInfoReqSeq = 0;
   }
 
   async onEnter(buildingName) {
@@ -634,11 +638,204 @@ export class IndoorSubsystem extends CustomSystem {
   }
 
   clearDeviceIconSelection() {
+    this._smartLockInfoReqSeq += 1;
     const el = this._selectedDeviceIconLabel?.element;
     if (el) {
       el.classList.remove("web3d-device-icon--selected");
     }
     this._selectedDeviceIconLabel = null;
+
+    if (this._smartLockInfoCss2d) {
+      this._smartLockInfoCss2d.visible = false;
+      if (this._smartLockInfoCss2d.element) {
+        this._smartLockInfoCss2d.element.style.display = "none";
+      }
+    }
+  }
+
+  _buildSmartLockInfoBoardRoot(lock, uuid, openLogs, meta) {
+    const loading = meta?.loading;
+    const errMsg = meta?.error;
+    const noQuery = meta?.noQuery;
+
+    const root = document.createElement("div");
+    root.className = "web3d-smartlock-board";
+
+    const title = document.createElement("div");
+    title.className = "web3d-smartlock-board__title";
+    title.textContent = lock?.name || `门锁 ${uuid}`;
+
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "web3d-smartlock-board__close";
+    closeBtn.type = "button";
+    closeBtn.textContent = "×";
+    closeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.clearDeviceIconSelection();
+    });
+    title.appendChild(closeBtn);
+    root.appendChild(title);
+
+    const kv = document.createElement("div");
+    kv.className = "web3d-smartlock-board__kv";
+
+    const addKv = (k, v) => {
+      const ke = document.createElement("div");
+      ke.className = "web3d-smartlock-board__k";
+      ke.textContent = k;
+      const ve = document.createElement("div");
+      ve.className = "web3d-smartlock-board__v";
+      ve.textContent = v == null ? "-" : String(v);
+      kv.appendChild(ke);
+      kv.appendChild(ve);
+    };
+
+    addKv("apartmentName", lock?.apartmentName);
+    addKv("floorName", lock?.floorName);
+    addKv("roomName", lock?.roomName);
+    addKv("uuid", lock?.uuid || uuid);
+    addKv("status", lock?.status);
+    addKv("battery", lock?.battery);
+    addKv("firmware", lock?.firmwareVersion);
+
+    root.appendChild(kv);
+
+    const divider = document.createElement("div");
+    divider.className = "web3d-smartlock-board__divider";
+    root.appendChild(divider);
+
+    const logsTitle = document.createElement("div");
+    logsTitle.className = "web3d-smartlock-board__logs-title";
+    if (noQuery) {
+      logsTitle.textContent = "开门记录";
+    } else {
+      logsTitle.textContent = `开门记录（lockName: ${lock?.name || "-"}，apartmentName: ${
+        lock?.apartmentName || "-"
+      }）`;
+    }
+    root.appendChild(logsTitle);
+
+    if (loading) {
+      const t = document.createElement("div");
+      t.className = "web3d-smartlock-board__log-meta";
+      t.textContent = "开门记录加载中…";
+      root.appendChild(t);
+    } else if (errMsg) {
+      const t = document.createElement("div");
+      t.className = "web3d-smartlock-board__log-meta";
+      t.textContent = `加载失败: ${errMsg}`;
+      root.appendChild(t);
+    } else if (noQuery) {
+      const t = document.createElement("div");
+      t.className = "web3d-smartlock-board__log-meta";
+      t.textContent =
+        "无接口1数据：无法从 uuid 关联 lockName / apartmentName，不请求开门记录。";
+      root.appendChild(t);
+    } else {
+      const showLogs = (openLogs || []).slice(0, 12);
+      if (!showLogs.length) {
+        const empty = document.createElement("div");
+        empty.className = "web3d-smartlock-board__log-meta";
+        empty.textContent = "暂无记录";
+        root.appendChild(empty);
+      } else {
+        showLogs.forEach((r) => {
+          const row = document.createElement("div");
+          row.className = "web3d-smartlock-board__log";
+          const op = document.createElement("div");
+          op.className = "web3d-smartlock-board__log-op";
+          op.textContent = r.operation || "-";
+          const metaE = document.createElement("div");
+          metaE.className = "web3d-smartlock-board__log-meta";
+          metaE.textContent = `${r.name || "-"} ${r.cardCode || "-"} · ${r.operTime || "-"}`;
+          row.appendChild(op);
+          row.appendChild(metaE);
+          root.appendChild(row);
+        });
+      }
+    }
+
+    return root;
+  }
+
+  _attachSmartLockInfoBoardToLabel(root, label) {
+    if (!this._smartLockInfoCss2d) {
+      this._smartLockInfoCss2d = createCSS2DObject(root, "smartLockInfoBoard");
+      this.scene.add(this._smartLockInfoCss2d);
+    } else {
+      const oldEl = this._smartLockInfoCss2d.element;
+      if (oldEl && oldEl.parentElement) {
+        oldEl.parentElement.replaceChild(root, oldEl);
+      }
+      this._smartLockInfoCss2d.element = root;
+    }
+    const wp = new THREE.Vector3();
+    label.getWorldPosition(wp);
+    wp.y += 3.0;
+    this._smartLockInfoCss2d.position.copy(wp);
+    this._smartLockInfoCss2d.visible = true;
+    root.style.display = "block";
+  }
+
+  /**
+   * 点击/搜索选中门锁后：调接口2，参数 lockName、apartmentName 来自接口1 中与 uuid 关联的 name、apartmentName
+   */
+  async showSmartLockInfoForLabel(label) {
+    const uuid = label?.userData?.deviceIconDeviceId;
+    if (!uuid) return;
+
+    // 等接口1落地后再按 uuid 取 lock，避免点击比 init 快导致不调接口2
+    try {
+      if (this.core?.ground?.initSmartLockData) {
+        await this.core.ground.initSmartLockData();
+      }
+    } catch (_) {
+      // init 失败仍继续展示/尝试按 uuid
+    }
+
+    // clearDeviceIconSelection 与 focus 已 bump 过 seq，这里不要再 ++，否则 req 与回包校验会错位
+    const req = this._smartLockInfoReqSeq;
+    const lock = this.core?.ground?.getSmartLockInfoByUuid?.(uuid);
+
+    const lockName = lock?.name;
+    const apartmentName = lock?.apartmentName;
+
+    this._attachSmartLockInfoBoardToLabel(
+      this._buildSmartLockInfoBoardRoot(lock, uuid, null, { loading: true }),
+      label
+    );
+
+    if (!lockName || !apartmentName) {
+      this._attachSmartLockInfoBoardToLabel(
+        this._buildSmartLockInfoBoardRoot(lock, uuid, [], { noQuery: true }),
+        label
+      );
+      return;
+    }
+
+    try {
+      const res = await smartLockOpenLogPage({
+        pageNum: 1,
+        pageSize: 12,
+        lockName,
+        apartmentName,
+      });
+      if (req !== this._smartLockInfoReqSeq) return;
+      const logs = res?.result?.data?.list || [];
+      this._attachSmartLockInfoBoardToLabel(
+        this._buildSmartLockInfoBoardRoot(lock, uuid, logs, { loading: false }),
+        label
+      );
+    } catch (e) {
+      if (req !== this._smartLockInfoReqSeq) return;
+      this._attachSmartLockInfoBoardToLabel(
+        this._buildSmartLockInfoBoardRoot(lock, uuid, [], {
+          loading: false,
+          error: e?.message || String(e),
+        }),
+        label
+      );
+    }
   }
 
   /**
@@ -652,6 +849,7 @@ export class IndoorSubsystem extends CustomSystem {
     this._selectedDeviceIconLabel = label;
     label.element.classList.add("web3d-device-icon--selected");
     label.visible = true;
+    void this.showSmartLockInfoForLabel(label);
 
     if (this.currentFloor?.name) {
       this.syncGroundDeviceIconVisibility(this.currentFloor.name);

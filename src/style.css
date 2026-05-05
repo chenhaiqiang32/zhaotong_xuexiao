@@ -43,6 +43,93 @@ body,
     box-sizing: border-box;
 }
 
+/* 门锁信息牌子（CSS2D DOM） */
+.web3d-smartlock-board {
+    position: absolute;
+    transform: translate(-50%, -120%);
+    min-width: 260px;
+    max-width: 360px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: rgba(15, 22, 36, 0.92);
+    border: 1px solid rgba(0, 212, 255, 0.45);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
+    color: #eaf7ff;
+    pointer-events: auto;
+}
+
+.web3d-smartlock-board__title {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.web3d-smartlock-board__close {
+    border: none;
+    background: transparent;
+    color: rgba(234, 247, 255, 0.75);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px 6px;
+}
+
+.web3d-smartlock-board__kv {
+    display: grid;
+    grid-template-columns: 88px 1fr;
+    row-gap: 6px;
+    column-gap: 10px;
+    font-size: 12px;
+    margin-bottom: 8px;
+}
+
+.web3d-smartlock-board__k {
+    color: rgba(168, 196, 216, 0.9);
+}
+
+.web3d-smartlock-board__v {
+    color: #fff;
+    word-break: break-all;
+}
+
+.web3d-smartlock-board__divider {
+    height: 1px;
+    background: rgba(77, 149, 173, 0.4);
+    margin: 8px 0;
+}
+
+.web3d-smartlock-board__logs-title {
+    font-size: 12px;
+    color: rgba(168, 196, 216, 0.95);
+    margin-bottom: 6px;
+}
+
+.web3d-smartlock-board__log {
+    display: grid;
+    grid-template-columns: 54px 1fr;
+    column-gap: 10px;
+    font-size: 12px;
+    padding: 6px 0;
+    border-top: 1px dashed rgba(77, 149, 173, 0.25);
+}
+
+.web3d-smartlock-board__log:first-of-type {
+    border-top: none;
+}
+
+.web3d-smartlock-board__log-op {
+    color: #00d4ff;
+    font-weight: 600;
+}
+
+.web3d-smartlock-board__log-meta {
+    color: rgba(234, 247, 255, 0.9);
+}
+
 /* 设备搜索（类型 + 编号），调试用；父页面可用 postMessage cmd: focusDeviceBySearch */
 .web3d-device-search-panel {
     position: absolute;
