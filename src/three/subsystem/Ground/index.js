@@ -152,6 +152,8 @@ export class Ground extends CustomSystem {
     /** @type {Promise<void> | null} */
     this._smartLockInitPromise = null;
 
+    this.grassGround = null;
+
     this.init();
   }
 
@@ -1622,8 +1624,38 @@ string} name
     // 清理建筑灯光
     this.clearBuildingLights();
 
+    // 清理草地底板
+    if (this.grassGround) {
+      this.scene.remove(this.grassGround);
+      if (this.grassGround.geometry) this.grassGround.geometry.dispose();
+      if (this.grassGround.material) this.grassGround.material.dispose();
+      this.grassGround = null;
+    }
+
     console.log("离开地面广场系统");
   }
+
+  createGrassGround() {
+    if (this.grassGround) return;
+    const size = 20000;
+    const geometry = new THREE.PlaneGeometry(size, size, 1, 1);
+    const material = new THREE.MeshStandardMaterial({
+      color: new THREE.Color("#1f6b2a"),
+      roughness: 1.0,
+      metalness: 0.0,
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.name = "web3d_grass_ground";
+    mesh.rotation.x = -Math.PI / 2;
+    // 放在地形下方一点，避免 z-fighting
+    mesh.position.y = (this.altitude ?? -20) - 0.2;
+    mesh.receiveShadow = true;
+    mesh.castShadow = false;
+    mesh.renderOrder = -10;
+    this.scene.add(mesh);
+    this.grassGround = mesh;
+  }
+
   onLoaded() {
     if (!this.useCameraState) {
       autoRotate(this);
@@ -1642,6 +1674,8 @@ string} name
     }
 
     console.log("All models loaded successfully");
+    // 整体草地底板
+    this.createGrassGround();
     this.addEventListener();
     // ground场景正常流程镜头动画
     changeIndoor("home");

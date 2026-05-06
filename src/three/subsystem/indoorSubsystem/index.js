@@ -690,13 +690,14 @@ export class IndoorSubsystem extends CustomSystem {
       kv.appendChild(ve);
     };
 
-    addKv("apartmentName", lock?.apartmentName);
-    addKv("floorName", lock?.floorName);
-    addKv("roomName", lock?.roomName);
-    addKv("uuid", lock?.uuid || uuid);
-    addKv("status", lock?.status);
-    addKv("battery", lock?.battery);
-    addKv("firmware", lock?.firmwareVersion);
+    // 显示中文字段名（图1）
+    addKv("楼栋", lock?.apartmentName);
+    addKv("楼层", lock?.floorName);
+    addKv("房间", lock?.roomName);
+    addKv("设备编号", lock?.uuid || uuid);
+    addKv("状态", lock?.status);
+    addKv("电量", lock?.battery);
+    addKv("固件版本", lock?.firmwareVersion);
 
     root.appendChild(kv);
 
@@ -706,13 +707,8 @@ export class IndoorSubsystem extends CustomSystem {
 
     const logsTitle = document.createElement("div");
     logsTitle.className = "web3d-smartlock-board__logs-title";
-    if (noQuery) {
-      logsTitle.textContent = "开门记录";
-    } else {
-      logsTitle.textContent = `开门记录（lockName: ${lock?.name || "-"}，apartmentName: ${
-        lock?.apartmentName || "-"
-      }）`;
-    }
+    // 仅显示“开门记录”（图2）
+    logsTitle.textContent = "开门记录";
     root.appendChild(logsTitle);
 
     if (loading) {
