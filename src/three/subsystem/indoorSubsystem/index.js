@@ -1630,6 +1630,16 @@ export class IndoorSubsystem extends CustomSystem {
   clearIndoorData() {
     console.log("开始清理室内系统数据...");
 
+    // 切换楼栋时，彻底清理门锁选中态与信息牌子，避免旧 CSS2DObject/DOM 悬空导致后续不显示
+    this.clearDeviceIconSelection();
+    if (this._smartLockInfoCss2d) {
+      this.scene.remove(this._smartLockInfoCss2d);
+      if (this._smartLockInfoCss2d.element) {
+        this._smartLockInfoCss2d.element.remove();
+      }
+      this._smartLockInfoCss2d = null;
+    }
+
     if (
       this.core.ground &&
       typeof this.core.ground.detachDeviceIconsFromIndoorScene === "function"

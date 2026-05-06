@@ -82,6 +82,15 @@ export default defineConfig({
   },
   server: {
     host: "0.0.0.0",
+    proxy: {
+      // 门锁接口：本地通过代理访问 JetLinks
+      // 代码里 baseURL 使用 window.configs.smartLockApiBase = "/api/smart-lock"
+      "/api/smart-lock": {
+        target: "https://lot.nimt.edu.cn",
+        changeOrigin: true,
+        secure: false,
+      },
+    },
     fs: {
       // 允许访问项目根目录之外的文件
       strict: false,
