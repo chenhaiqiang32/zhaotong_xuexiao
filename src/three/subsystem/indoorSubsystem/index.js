@@ -449,7 +449,7 @@ export class IndoorSubsystem extends CustomSystem {
       position = new THREE.Vector3(
         center.x,
         center.y + 8,
-        center.z + cameraDistance * 1.2
+        center.z - cameraDistance * 1.2
       );
 
       this.tweenControl.changeTo({
@@ -538,7 +538,7 @@ export class IndoorSubsystem extends CustomSystem {
       const position = new THREE.Vector3(
         center.x,
         center.y + floorHeight + cameraDistance * 1.2,
-        center.z + cameraDistance
+        center.z-cameraDistance
       );
 
       this.tweenControl.changeTo({

@@ -444,7 +444,8 @@ export class Ground extends CustomSystem {
     if (this.groundMesh) {
       this.onLoaded();
       this.isLoaded = true;
-      this.setHDRSky();
+      this.setEnvironment();
+      this.setEnvironment('room');
     }
   }
 
@@ -1635,25 +1636,45 @@ string} name
     console.log("离开地面广场系统");
   }
 
+  // createGrassGround() {
+  //   if (this.grassGround) return;
+  //   const size = 20000;
+  //   const geometry = new THREE.PlaneGeometry(size, size, 1, 1);
+  //   const material = new THREE.MeshStandardMaterial({
+  //     color: new THREE.Color("#1f6b2a"),
+  //     roughness: 1.0,
+  //     metalness: 0.0,
+  //   });
+  //   const mesh = new THREE.Mesh(geometry, material);
+  //   mesh.name = "web3d_grass_ground";
+  //   mesh.rotation.x = -Math.PI / 2;
+  //   // 放在地形下方一点，避免 z-fighting
+  //   mesh.position.y = (this.altitude ?? -20) - 0.2;
+  //   mesh.receiveShadow = true;
+  //   mesh.castShadow = false;
+  //   mesh.renderOrder = -10;
+  //   this.scene.add(mesh);
+  //   this.grassGround = mesh;
+  // }
   createGrassGround() {
     if (this.grassGround) return;
-    const size = 20000;
-    const geometry = new THREE.PlaneGeometry(size, size, 1, 1);
-    const material = new THREE.MeshStandardMaterial({
-      color: new THREE.Color("#1f6b2a"),
-      roughness: 1.0,
-      metalness: 0.0,
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.name = "web3d_grass_ground";
-    mesh.rotation.x = -Math.PI / 2;
-    // 放在地形下方一点，避免 z-fighting
-    mesh.position.y = (this.altitude ?? -20) - 0.2;
-    mesh.receiveShadow = true;
-    mesh.castShadow = false;
-    mesh.renderOrder = -10;
-    this.scene.add(mesh);
-    this.grassGround = mesh;
+    //  GROUND
+    const gt = new THREE.TextureLoader().load( './textures/grasslight-big.jpg' );
+    const gg = new THREE.PlaneGeometry( 20000, 20000 );
+    const gm = new THREE.MeshPhongMaterial( { color: 0xffffff, map: gt } );
+
+    const ground = new THREE.Mesh( gg, gm );
+    ground.rotation.x = - Math.PI / 2;
+    ground.position.y = 0;
+    ground.material.map.repeat.set( 8000, 8000 );
+    ground.material.map.wrapS = ground.material.map.wrapT = THREE.RepeatWrapping;
+    ground.material.map.colorSpace = THREE.SRGBColorSpace;
+    ground.renderOrder=-10;
+    ground.receiveShadow = true;
+    ground.name = "web3d_grass_ground";
+
+    this.scene.add(ground);
+    this.grassGround = ground;
   }
 
   onLoaded() {
@@ -1675,7 +1696,7 @@ string} name
 
     console.log("All models loaded successfully");
     // 整体草地底板
-    this.createGrassGround();
+    // this.createGrassGround();
     this.addEventListener();
     // ground场景正常流程镜头动画
     changeIndoor("home");
@@ -2026,7 +2047,7 @@ string} name
     const finalCameraPosition = new THREE.Vector3(
       center.x,
       center.y + 4,
-      center.z+radius*2.5
+      center.z-radius*2
     );
     const controlsTarget = center.clone();
 
@@ -2062,7 +2083,8 @@ string} name
   }
   initLight() {
     // 设置 RoomEnvironment 环境效果
-    this.setEnvironment("hdr");
+    this.setEnvironment();
+    this.setEnvironment('room');
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 1.45); // 线性SRG
     const directionalLight = new THREE.DirectionalLight(0xffffff, 1.55);
@@ -2403,7 +2425,7 @@ string} name
     loader.setDataType(THREE.FloatType);
 
     loader.load(
-      "./hdr3.hdr",
+      "./textures/hdr/horn-koppe_spring_1k.hdr",
       (texture) => {
         console.log("HDR 加载成功:", texture);
         texture.mapping = THREE.EquirectangularReflectionMapping;
