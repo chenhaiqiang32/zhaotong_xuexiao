@@ -157,13 +157,23 @@ body,
     color: #a8c4d8;
 }
 
-.web3d-device-search-panel input {
+.web3d-device-search-panel input,
+.web3d-device-search-panel select {
     padding: 6px 8px;
     border-radius: 4px;
     border: 1px solid #3b507c;
     background: rgba(0, 0, 0, 0.35);
     color: #fff;
     font-size: 13px;
+}
+
+.web3d-device-search-panel select {
+    cursor: pointer;
+}
+
+.web3d-device-search-panel select option {
+    background: #152033;
+    color: #fff;
 }
 
 .web3d-device-search-panel button {
@@ -196,6 +206,64 @@ body,
     transform: translate(-50%, -100%) !important;
     position: absolute;
 }
+/* 建筑顶部名称牌子：整体在楼顶上方，底部箭头指向建筑顶部 */
+.building-name-board {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: auto !important;
+    height: auto;
+    cursor: pointer;
+    pointer-events: auto;
+}
+.building-name-board__text {
+    position: relative;
+    z-index: 1;
+    padding: 6px 16px;
+    background: rgba(23, 32, 52, 0.55) linear-gradient(180deg, #3b507c 0%, rgba(0, 0, 0, 0.55) 100%);
+    white-space: nowrap;
+    letter-spacing: 4px;
+    border: 1px solid #4d95ad;
+    font-size: 14px;
+    font-family: 微软雅黑;
+    color: #ffffff;
+    line-height: 14px;
+    text-shadow: 0px 0px 5px #55a7c2;
+    box-sizing: border-box;
+}
+.building-name-board__top {
+    width: 33px;
+    height: 1px;
+    background: #40c5f1;
+    left: 50%;
+    margin-left: -16.5px;
+    position: absolute;
+    top: -1px;
+}
+.building-name-board__bottom {
+    background: url("/textures/orientation/titleTop.png");
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    width: 19px;
+    height: 4px;
+    left: 50%;
+    margin-left: -9.5px;
+    position: absolute;
+    bottom: -3px;
+}
+.building-name-board__arrow {
+    background: url("/textures/orientation/titleBottom.png");
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center bottom;
+    width: 14px;
+    height: 10px;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
 .beilu_three_Board_text_person {
     width: auto !important;
     height: auto;

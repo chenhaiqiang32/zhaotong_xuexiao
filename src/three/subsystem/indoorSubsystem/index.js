@@ -16,7 +16,11 @@ import BoxModel from "../../../lib/boxModel";
 import { dynamicFade, fadeByTime } from "../../../shader";
 import { SceneHint } from "../../components/SceneHint";
 import { equipmentTreeManager } from "./equipmentTreeManager";
-import { smartLockOpenLogPage } from "../../../api/smartLock";
+import {
+  DEVICE_TYPE_LABELS,
+  fetchDeviceInfoByType,
+  smartLockOpenLogPage,
+} from "../../../api/iotDevice";
 
 /**@type {OrbitControls} */
 const controlsParameters = {
@@ -90,6 +94,8 @@ export class IndoorSubsystem extends CustomSystem {
 
     this._smartLockInfoCss2d = null;
     this._smartLockInfoReqSeq = 0;
+    /** 通用设备信息牌与门锁信息牌共用同一 CSS2D 节点 */
+    this._deviceInfoReqSeq = 0;
   }
 
   async onEnter(buildingName) {
@@ -639,6 +645,7 @@ export class IndoorSubsystem extends CustomSystem {
 
   clearDeviceIconSelection() {
     this._smartLockInfoReqSeq += 1;
+    this._deviceInfoReqSeq += 1;
     const el = this._selectedDeviceIconLabel?.element;
     if (el) {
       el.classList.remove("web3d-device-icon--selected");
@@ -834,6 +841,227 @@ export class IndoorSubsystem extends CustomSystem {
     }
   }
 
+  _flattenDevicePayload(payload, maxItems = 24) {
+    const rows = [];
+    const push = (k, v) => {
+      if (rows.length >= maxItems) return;
+      if (v == null || v === "") return;
+      if (typeof v === "object") {
+        try {
+          rows.push([k, JSON.stringify(v)]);
+        } catch (_) {
+          rows.push([k, String(v)]);
+        }
+        return;
+      }
+      rows.push([k, String(v)]);
+    };
+
+    if (payload == null) return rows;
+
+    let data = payload;
+    // 常见包装：result.data / data / list / records
+    if (data?.result?.data != null) data = data.result.data;
+    else if (data?.data != null) data = data.data;
+
+    if (Array.isArray(data)) {
+      const first = data[0];
+      if (first && typeof first === "object") {
+        Object.keys(first).forEach((k) => push(k, first[k]));
+        if (data.length > 1) push("条目数", data.length);
+      } else {
+        push("结果", JSON.stringify(data).slice(0, 500));
+      }
+      return rows;
+    }
+
+    if (typeof data === "object") {
+      const list =
+        data.list || data.records || data.rows || data.content || null;
+      if (Array.isArray(list) && list[0] && typeof list[0] === "object") {
+        Object.keys(list[0]).forEach((k) => push(k, list[0][k]));
+        if (list.length > 1) push("条目数", list.length);
+        Object.keys(data).forEach((k) => {
+          if (k === "list" || k === "records" || k === "rows" || k === "content")
+            return;
+          if (typeof data[k] !== "object") push(k, data[k]);
+        });
+        return rows;
+      }
+      Object.keys(data).forEach((k) => push(k, data[k]));
+      return rows;
+    }
+
+    push("结果", String(data));
+    return rows;
+  }
+
+  _buildDeviceInfoBoardRoot({ type, deviceId, title, rows, meta }) {
+    const loading = meta?.loading;
+    const errMsg = meta?.error;
+    const hint = meta?.hint;
+
+    const root = document.createElement("div");
+    root.className = "web3d-smartlock-board web3d-device-info-board";
+
+    const titleEl = document.createElement("div");
+    titleEl.className = "web3d-smartlock-board__title";
+    titleEl.textContent =
+      title ||
+      DEVICE_TYPE_LABELS[type] ||
+      type ||
+      "设备详情";
+
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "web3d-smartlock-board__close";
+    closeBtn.type = "button";
+    closeBtn.textContent = "×";
+    closeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.clearDeviceIconSelection();
+    });
+    titleEl.appendChild(closeBtn);
+    root.appendChild(titleEl);
+
+    const kv = document.createElement("div");
+    kv.className = "web3d-smartlock-board__kv";
+
+    const addKv = (k, v) => {
+      const ke = document.createElement("div");
+      ke.className = "web3d-smartlock-board__k";
+      ke.textContent = k;
+      const ve = document.createElement("div");
+      ve.className = "web3d-smartlock-board__v";
+      ve.textContent = v == null ? "-" : String(v);
+      kv.appendChild(ke);
+      kv.appendChild(ve);
+    };
+
+    addKv("类型", DEVICE_TYPE_LABELS[type] || type);
+    addKv("编号", deviceId);
+
+    if (loading) {
+      root.appendChild(kv);
+      const t = document.createElement("div");
+      t.className = "web3d-smartlock-board__log-meta";
+      t.textContent = "加载中…";
+      root.appendChild(t);
+      return root;
+    }
+
+    if (errMsg) {
+      root.appendChild(kv);
+      const t = document.createElement("div");
+      t.className = "web3d-smartlock-board__log-meta";
+      t.textContent = `加载失败: ${errMsg}`;
+      root.appendChild(t);
+      return root;
+    }
+
+    if (hint) {
+      root.appendChild(kv);
+      const t = document.createElement("div");
+      t.className = "web3d-smartlock-board__log-meta";
+      t.textContent = hint;
+      root.appendChild(t);
+      return root;
+    }
+
+    (rows || []).forEach(([k, v]) => addKv(k, v));
+    root.appendChild(kv);
+
+    if (!(rows || []).length) {
+      const empty = document.createElement("div");
+      empty.className = "web3d-smartlock-board__log-meta";
+      empty.textContent = "暂无数据";
+      root.appendChild(empty);
+    }
+
+    return root;
+  }
+
+  _attachDeviceInfoBoardToLabel(root, label) {
+    this._attachSmartLockInfoBoardToLabel(root, label);
+  }
+
+  /**
+   * 点击/搜索选中 IoT 设备后：按类型调取对应接口并展示信息牌
+   */
+  async showIotDeviceInfoForLabel(label) {
+    const deviceId = label?.userData?.deviceIconDeviceId;
+    const type = label?.userData?.deviceIconType;
+    if (!deviceId || !type) return;
+
+    const req = this._deviceInfoReqSeq;
+    const floorKey = label.userData.deviceIconFloor;
+    const buildingId =
+      this.buildingName ||
+      (floorKey
+        ? String(floorKey).replace(/F\d{2}$/i, "")
+        : "");
+
+    this._attachDeviceInfoBoardToLabel(
+      this._buildDeviceInfoBoardRoot({
+        type,
+        deviceId,
+        meta: { loading: true },
+      }),
+      label
+    );
+
+    try {
+      const result = await fetchDeviceInfoByType(type, deviceId, {
+        buildingId,
+        buildingName: buildingId,
+      });
+      if (req !== this._deviceInfoReqSeq) return;
+
+      if (result?.meta?.skipped) {
+        this._attachDeviceInfoBoardToLabel(
+          this._buildDeviceInfoBoardRoot({
+            type,
+            deviceId,
+            meta: { hint: result.meta.reason },
+          }),
+          label
+        );
+        return;
+      }
+
+      const rows = this._flattenDevicePayload(result?.data);
+      this._attachDeviceInfoBoardToLabel(
+        this._buildDeviceInfoBoardRoot({
+          type,
+          deviceId,
+          title: `${DEVICE_TYPE_LABELS[type] || type}详情`,
+          rows,
+        }),
+        label
+      );
+    } catch (e) {
+      if (req !== this._deviceInfoReqSeq) return;
+      this._attachDeviceInfoBoardToLabel(
+        this._buildDeviceInfoBoardRoot({
+          type,
+          deviceId,
+          meta: { error: e?.message || String(e) },
+        }),
+        label
+      );
+    }
+  }
+
+  /**
+   * 按设备类型分发信息牌：mensuo 走旧门锁开门记录；其余走 IoT 接口
+   */
+  async showDeviceInfoForLabel(label) {
+    const type = String(label?.userData?.deviceIconType || "").split("_")[0];
+    if (type === "mensuo") {
+      return this.showSmartLockInfoForLabel(label);
+    }
+    return this.showIotDeviceInfoForLabel(label);
+  }
+
   /**
    * 视角拉近到设备 CSS2D 标签，并加上选中样式（依赖当前已在目标楼层且标签已挂到室内 scene）。
    * @param {import("three/examples/jsm/renderers/CSS2DRenderer").CSS2DObject} label
@@ -845,7 +1073,7 @@ export class IndoorSubsystem extends CustomSystem {
     this._selectedDeviceIconLabel = label;
     label.element.classList.add("web3d-device-icon--selected");
     label.visible = true;
-    void this.showSmartLockInfoForLabel(label);
+    void this.showDeviceInfoForLabel(label);
 
     if (this.currentFloor?.name) {
       this.syncGroundDeviceIconVisibility(this.currentFloor.name);

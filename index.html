@@ -16,10 +16,20 @@
   <script type="module" src="/src/main.js"></script>
   <div class="web3d-device-search-panel" id="web3dDeviceSearchPanel" title="按室外设备索引定位（与设备.glb 中类型/编号一致）">
     <label>设备类型
-      <input type="text" id="web3dDeviceType" value="mensuo" placeholder="如 mensuo" autocomplete="off" />
+      <select id="web3dDeviceType">
+        <option value="zhinengmensuo">智能门锁 (zhinengmensuo)</option>
+        <option value="LDXX">楼栋信息 (LDXX)</option>
+        <option value="shuibiao1">水表一期 (shuibiao1)</option>
+        <option value="shuibiao2">水表二期 (shuibiao2)</option>
+        <option value="fangkeji">访客机 (fangkeji)</option>
+        <option value="guangbo">广播 (guangbo)</option>
+        <option value="jiankong">监控 (jiankong)</option>
+        <option value="menjin">门禁 (menjin)</option>
+        <option value="mensuo">智能门锁旧 (mensuo)</option>
+      </select>
     </label>
     <label>设备编号
-      <input type="text" id="web3dDeviceId" placeholder="如 80A036AE6EF3" autocomplete="off" />
+      <input type="text" id="web3dDeviceId" placeholder="点击图标得到的编号" autocomplete="off" />
     </label>
     <button type="button" id="web3dDeviceSearchBtn">定位设备</button>
   </div>
@@ -33,7 +43,7 @@
       const idEl = document.getElementById("web3dDeviceId");
       if (!btn || !typeEl || !idEl) return;
       btn.addEventListener("click", async () => {
-        const deviceType = (typeEl.value || "mensuo").trim();
+        const deviceType = (typeEl.value || "zhinengmensuo").trim();
         const deviceId = (idEl.value || "").trim();
         if (!deviceId) {
           alert("请填写设备编号");

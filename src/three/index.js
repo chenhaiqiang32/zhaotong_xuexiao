@@ -268,7 +268,7 @@ export class Store3D extends CoreExtensions {
   }
 
   /**
-   * 按设备类型（如 mensuo）与设备编号搜索室外设备索引，进入对应楼层并拉近视角、选中样式
+   * 按设备类型（如 zhinengmensuo、menjin）与设备编号搜索室外设备索引，进入对应楼层并拉近视角、选中样式
    */
   async focusDeviceByTypeAndId(deviceType, deviceId) {
     const found = this.ground.findDeviceIconByTypeAndId(deviceType, deviceId);

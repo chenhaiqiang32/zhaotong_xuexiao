@@ -1,4 +1,4 @@
-import { createCSS2DObject, createCSS3DSprite } from "../../../lib/CSSObject";
+import { createCSS2DObject } from "../../../lib/CSSObject";
 
 export const createBuildingNameLabel = (
   innerText,
@@ -7,17 +7,33 @@ export const createBuildingNameLabel = (
   onMouseEnter,
   onMouseLeave
 ) => {
-  let labelEle = document.createElement("div");
-  let labelEleOut = document.createElement("div");
-  labelEleOut.append(labelEle);
+  const labelEleOut = document.createElement("div");
   labelEleOut.draggable = false;
-  labelEleOut.className = "beilu_three_Board_text_person";
-  labelEle.innerText = innerText;
-  let css2d = createCSS2DObject(labelEleOut);
+  labelEleOut.className = "building-name-board";
 
-  // Support both single and double click
+  const labelEle = document.createElement("div");
+  labelEle.className = "building-name-board__text";
+  labelEle.innerText = innerText ?? "";
+
+  const labelTop = document.createElement("div");
+  labelTop.className = "building-name-board__top";
+
+  const labelBottom = document.createElement("div");
+  labelBottom.className = "building-name-board__bottom";
+
+  const labelArrow = document.createElement("div");
+  labelArrow.className = "building-name-board__arrow";
+
+  labelEle.append(labelTop, labelBottom);
+  labelEleOut.append(labelEle, labelArrow);
+
+  const css2d = createCSS2DObject(labelEleOut);
+  // 锚点落在牌子底部箭头尖端，保证箭头指向建筑顶部
+  css2d.center.set(0.5, 0);
+
   let clickTimer = null;
-  labelEle.onclick = (e) => {
+  const bindTarget = labelEleOut;
+  bindTarget.onclick = (e) => {
     if (clickTimer) {
       clearTimeout(clickTimer);
       clickTimer = null;
@@ -27,7 +43,7 @@ export const createBuildingNameLabel = (
       clickTimer = null;
     }, 250);
   };
-  labelEle.ondblclick = (e) => {
+  bindTarget.ondblclick = (e) => {
     if (clickTimer) {
       clearTimeout(clickTimer);
       clickTimer = null;
@@ -35,14 +51,13 @@ export const createBuildingNameLabel = (
     if (onDoubleClick) onDoubleClick(css2d, e);
   };
 
-  // 添加鼠标悬停事件
   if (onMouseEnter) {
-    labelEle.onmouseenter = (e) => {
+    bindTarget.onmouseenter = (e) => {
       onMouseEnter(css2d, e);
     };
   }
   if (onMouseLeave) {
-    labelEle.onmouseleave = (e) => {
+    bindTarget.onmouseleave = (e) => {
       onMouseLeave(css2d, e);
     };
   }

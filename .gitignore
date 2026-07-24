@@ -24,3 +24,7 @@ dist.*
 *.sln
 *.sw?
 *.rar
+
+# Large archives (GitHub 100MB limit)
+docs.zip
+*.zip

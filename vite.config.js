@@ -84,11 +84,19 @@ export default defineConfig({
     host: "0.0.0.0",
     proxy: {
       // 门锁接口：本地通过代理访问 JetLinks
-      // 代码里 baseURL 使用 window.configs.smartLockApiBase = "/api/smart-lock"
-      "/api/smart-lock": {
+      // 代码里 baseURL 使用 window.configs.smartLockApiBase = "/api"
+      "/api": {
         target: "https://lot.nimt.edu.cn",
         changeOrigin: true,
         secure: false,
+      },
+      // IoT 设备接口：本地 /api/iot/* → https://iot.niat.edu.cn/api/*
+      // 代码里 baseURL 使用 window.configs.iotApiBase = "/api/iot"
+      "/api/iot": {
+        target: "https://iot.niat.edu.cn",
+        changeOrigin: true,
+        secure: false,
+        rewrite: (p) => p.replace(/^\/api\/iot/, "/api"),
       },
     },
     fs: {

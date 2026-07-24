@@ -39,7 +39,7 @@ import { Tooltip } from "../../components/Tooltip";
 import { SceneHint } from "../../components/SceneHint";
 import { BuildingHoverRings } from "../../../lib/BuildingHoverRings";
 import { glassEffect } from "../../../shader";
-import { smartLockPage } from "../../../api/smartLock";
+import { smartLockPage, DEVICE_ICON_SRC } from "../../../api/iotDevice";
 
 // 获取模型文件列表
 async function getModelFiles() {
@@ -529,9 +529,8 @@ export class Ground extends CustomSystem {
    * @param {THREE.Object3D} model 设备.glb 根节点
    */
   buildDeviceIconsFromEquipmentModel(model) {
-    const iconSrcByType = {
-      mensuo: "/icons/mensuo.png",
-    };
+    console.log("buildDeviceIconsFromEquipmentModel: 开始解析设备.glb模型", model);
+    const iconSrcByType = { ...DEVICE_ICON_SRC };
 
     const ensureStore = (floor, type) => {
       this.deviceIconLabels[floor] = this.deviceIconLabels[floor] || {};
@@ -650,7 +649,7 @@ export class Ground extends CustomSystem {
   }
 
   /**
-   * 按设备类型与编号查找门锁等 CSS2D 图标（与 deviceIconLabels 中 type 一致，如 mensuo）。
+   * 按设备类型与编号查找 CSS2D 图标（与 deviceIconLabels 中 type 一致，如 zhinengmensuo、menjin）。
    * @returns {{ floor: string, label: import("three").Object3D } | null}
    */
   findDeviceIconByTypeAndId(type, deviceId) {
@@ -883,7 +882,7 @@ string} name
             child.userData.buildingName = name;
           }
         });
-        // this.setBuildingBoard(childs);
+        this.setBuildingBoard(childs);
       });
       this.cameraResetModel = model;
       this.buildingModel = model;
@@ -1420,18 +1419,34 @@ string} name
   setBuildingBoard(group) {
     // 用于计算旋转中心的建筑
     const { center, max } = getBoxCenter(group);
-    const currentPosition = new THREE.Vector3(center.x, max.y, center.z);
+    const currentPosition = new THREE.Vector3(center.x, max.y + 12, center.z);
     const name = group.name;
 
     // 根据建筑编号，找到对应的建筑名称，创建建筑标识牌
-    const buildingName = name.split("_")[1];
+    const buildingName = name;
     const buildingTypeName = {
-      制冷: "能源站",
-      制热: "热水系统",
-      配电室: "配电室地下一层",
+      A01B001: "笃行楼",
+      A01B002: "敏行楼",
+      A01B003: "慎行楼",
+      A01B004: "知行楼",
+      A01B005: "双创楼（弘毅弘德）",
+      A01B006: "乐学楼",
+      A01B007: "勤学楼",
+      A01B008: "善学楼",
+      A01B009: "思学楼",
+      A01B010: "博学楼",
+      A01B011: "育德楼",
+      J32012500010105: "润泽苑",
+      A01B013: "润泽连廊",
+      J32012500010106: "思齐苑",
+      A01B015: "静思连廊",
+      J32012500010104: "静思苑",
+      J32012500010103: "博雅苑",
+      A01B018: "四号配电房",
+      A01B019: "食堂大活",
     };
     const nameLabel = createBuildingNameLabel(
-      buildingTypeName[buildingName],
+      buildingTypeName[name],
       // 单击：拉近视角
       (css2d) => {
         this.cameraMoveToBuildingTitle(name);
