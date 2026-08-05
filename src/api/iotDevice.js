@@ -15,15 +15,15 @@ export const DEVICE_TYPE_LABELS = {
 
 /** 图标路径（与 public/icons 一致；mensuo 兼容旧模型节点） */
 export const DEVICE_ICON_SRC = {
-  mensuo: "/icons/mensuo.png",
-  zhinengmensuo: "/icons/zhinengmensuo.png",
-  LDXX: "/icons/LDXX.png",
-  shuibiao1: "/icons/shuibiao.png",
-  shuibiao2: "/icons/shuibiao.png",
-  fangkeji: "/icons/fangkeji.png",
-  guangbo: "/icons/guangbo.png",
-  jiankong: "/icons/jiankong.png",
-  menjin: "/icons/menjin.png",
+  mensuo: "./icons/mensuo.png",
+  zhinengmensuo: "./icons/zhinengmensuo.png",
+  LDXX: "./icons/LDXX.png",
+  shuibiao1: "./icons/shuibiao.png",
+  shuibiao2: "./icons/shuibiao.png",
+  fangkeji: "./icons/fangkeji.png",
+  guangbo: "./icons/guangbo.png",
+  jiankong: "./icons/jiankong.png",
+  menjin: "./icons/menjin.png",
 };
 
 function stripDahuaSuffix(id) {
