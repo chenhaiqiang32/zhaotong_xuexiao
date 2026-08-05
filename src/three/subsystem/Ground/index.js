@@ -10,6 +10,8 @@ import {
   changeIndoor,
   postBuildingId,
   web3dModelsGroup,
+  web3dDeviceIconClick,
+  normalizeDeviceIconType,
 } from "../../../message/postMessage";
 import { loadTexture } from "../../../utils/texture";
 import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
@@ -146,6 +148,10 @@ export class Ground extends CustomSystem {
     // 扁平索引：floor__type__deviceId -> { floor, type, deviceId, label }
     this.deviceIconIndex = {};
     this.deviceIconIndexByDeviceId = {};
+    /** 当前楼层显隐键；null 表示全部隐藏（未在室内或离开） */
+    this._deviceIconFloorKey = null;
+    /** 设备类型筛选；null 表示显示全部类型 */
+    this._deviceIconTypeFilter = null;
 
     // 门锁数据（uuid -> lockInfo，接口1）
     this.smartLockMap = {};
@@ -552,14 +558,21 @@ export class Ground extends CustomSystem {
         className: "web3d-device-icon__img",
         id: `web3d-device-icon-img-${safeDomId}`,
       });
+      // 底部尖角指向设备世界坐标锚点
+      const pointer = createDom({
+        className: "web3d-device-icon__pointer",
+        id: `web3d-device-icon-pointer-${safeDomId}`,
+      });
       const dom = createDom({
         className: `web3d-device-icon web3d-device-icon--${type}`,
         id: `web3d-device-icon-${safeDomId}`,
-        children: [img],
+        children: [img, pointer],
       });
 
       const label = createCSS2DObject(dom, `deviceIcon_${floor}_${type}_${deviceId}`);
       label.visible = false;
+      // 锚点落在底部尖角（center.y=1 → translateY -100%），使指针指向坐标
+      label.center.set(0.5, 1);
 
       const worldPos = new THREE.Vector3();
       target.getWorldPosition(worldPos);
@@ -574,6 +587,10 @@ export class Ground extends CustomSystem {
       const onPointerActivate = (e) => {
         e.preventDefault();
         e.stopPropagation();
+        web3dDeviceIconClick({
+          deviceType: label.userData.deviceIconType,
+          deviceName: label.userData.deviceIconDeviceId,
+        });
         const indoor = this.core?.indoorSubsystem;
         if (!indoor || typeof indoor.focusDeviceIconLabel !== "function") return;
         const floorKey = label.userData.deviceIconFloor;
@@ -666,24 +683,55 @@ export class Ground extends CustomSystem {
   }
 
   /**
+   * 按设备类型筛选 CSS2D 图标显隐（与楼层筛选叠加）。
+   * @param {string|null|undefined} deviceType - "all"/空/null 显示全部类型；否则仅显示该类型。
+   */
+  setDeviceIconTypeFilter(deviceType) {
+    if (
+      deviceType == null ||
+      deviceType === "" ||
+      deviceType === "all" ||
+      deviceType === "全部"
+    ) {
+      this._deviceIconTypeFilter = null;
+    } else {
+      // 水表一期/二期统一为 shuibiao
+      this._deviceIconTypeFilter = normalizeDeviceIconType(deviceType);
+    }
+    this._applyDeviceIconVisibility();
+  }
+
+  /**
    * 按楼层键控制设备 CSS2D 图标显隐（图标挂在室内场景时仍有效）。
    * floorKey 需与室内楼层节点名、设备.glb 第一层节点名一致（如 A01B001F03）。
    * @param {string|null|undefined} floorKey - 匹配的楼层显示；null/undefined/空字符串则全部隐藏。
    */
   setDeviceIconVisibilityForFloor(floorKey) {
-    if (!this.deviceIconLabels) return;
-    const showKey =
+    this._deviceIconFloorKey =
       floorKey == null || floorKey === "" ? null : String(floorKey);
+    this._applyDeviceIconVisibility();
+  }
+
+  /**
+   * 综合楼层键 + 类型筛选，刷新设备 CSS2D 图标可见性。
+   */
+  _applyDeviceIconVisibility() {
+    if (!this.deviceIconLabels) return;
+    const showKey = this._deviceIconFloorKey;
+    const typeFilter = this._deviceIconTypeFilter;
     Object.keys(this.deviceIconLabels).forEach((fk) => {
       const byType = this.deviceIconLabels[fk];
       if (!byType) return;
       Object.keys(byType).forEach((type) => {
         const byId = byType[type];
         if (!byId) return;
+        const typeMatch =
+          !typeFilter || normalizeDeviceIconType(type) === typeFilter;
         Object.keys(byId).forEach((id) => {
           const label = byId[id];
           if (label && label.isObject3D) {
-            label.visible = showKey !== null && fk === showKey;
+            label.visible =
+              showKey !== null && fk === showKey && typeMatch;
           }
         });
       });

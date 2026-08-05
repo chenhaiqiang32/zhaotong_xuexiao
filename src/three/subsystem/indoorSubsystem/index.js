@@ -19,6 +19,7 @@ import { equipmentTreeManager } from "./equipmentTreeManager";
 import {
   DEVICE_TYPE_LABELS,
   fetchDeviceInfoByType,
+  formatDeviceInfoRows,
   smartLockOpenLogPage,
 } from "../../../api/iotDevice";
 
@@ -841,61 +842,6 @@ export class IndoorSubsystem extends CustomSystem {
     }
   }
 
-  _flattenDevicePayload(payload, maxItems = 24) {
-    const rows = [];
-    const push = (k, v) => {
-      if (rows.length >= maxItems) return;
-      if (v == null || v === "") return;
-      if (typeof v === "object") {
-        try {
-          rows.push([k, JSON.stringify(v)]);
-        } catch (_) {
-          rows.push([k, String(v)]);
-        }
-        return;
-      }
-      rows.push([k, String(v)]);
-    };
-
-    if (payload == null) return rows;
-
-    let data = payload;
-    // 常见包装：result.data / data / list / records
-    if (data?.result?.data != null) data = data.result.data;
-    else if (data?.data != null) data = data.data;
-
-    if (Array.isArray(data)) {
-      const first = data[0];
-      if (first && typeof first === "object") {
-        Object.keys(first).forEach((k) => push(k, first[k]));
-        if (data.length > 1) push("条目数", data.length);
-      } else {
-        push("结果", JSON.stringify(data).slice(0, 500));
-      }
-      return rows;
-    }
-
-    if (typeof data === "object") {
-      const list =
-        data.list || data.records || data.rows || data.content || null;
-      if (Array.isArray(list) && list[0] && typeof list[0] === "object") {
-        Object.keys(list[0]).forEach((k) => push(k, list[0][k]));
-        if (list.length > 1) push("条目数", list.length);
-        Object.keys(data).forEach((k) => {
-          if (k === "list" || k === "records" || k === "rows" || k === "content")
-            return;
-          if (typeof data[k] !== "object") push(k, data[k]);
-        });
-        return rows;
-      }
-      Object.keys(data).forEach((k) => push(k, data[k]));
-      return rows;
-    }
-
-    push("结果", String(data));
-    return rows;
-  }
-
   _buildDeviceInfoBoardRoot({ type, deviceId, title, rows, meta }) {
     const loading = meta?.loading;
     const errMsg = meta?.error;
@@ -1028,7 +974,7 @@ export class IndoorSubsystem extends CustomSystem {
         return;
       }
 
-      const rows = this._flattenDevicePayload(result?.data);
+      const rows = formatDeviceInfoRows(type, result, { deviceId });
       this._attachDeviceInfoBoardToLabel(
         this._buildDeviceInfoBoardRoot({
           type,

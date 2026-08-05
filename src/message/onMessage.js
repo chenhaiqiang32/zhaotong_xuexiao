@@ -18,6 +18,7 @@ import {
   NIGHT,
   SCIENCE,
 } from "../three/components/weather";
+import { normalizeDeviceIconType } from "./postMessage";
 
 // 因为管控部分版本没有更新，所以需要这个映射表
 const TransformMap = {
@@ -370,6 +371,29 @@ export const onMessage = async () => {
             break;
           }
           void core.focusDeviceByTypeAndId(deviceType, String(deviceId));
+          break;
+        }
+        case "filterDeviceIcon": {
+          // 父页面筛选设备 icon：全部 / 指定类型（水表统一用 shuibiao）
+          // param: { deviceType: "all" } | { deviceType: "shuibiao" } | "all" | "menjin"
+          let p = event.data.param;
+          if (typeof p === "string") {
+            p =
+              p === "all" || p === "全部"
+                ? p
+                : normalizeDeviceIconType(p);
+          } else if (p && typeof p === "object") {
+            const raw = p.deviceType ?? p.type;
+            p = {
+              ...p,
+              deviceType:
+                raw === "all" || raw === "全部" || raw == null || raw === ""
+                  ? raw
+                  : normalizeDeviceIconType(raw),
+            };
+          }
+          console.log("收到 filterDeviceIcon:", p);
+          core.filterDeviceIcon(p);
           break;
         }
         case "goBack": {

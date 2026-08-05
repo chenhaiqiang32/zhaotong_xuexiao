@@ -295,6 +295,18 @@ export class Store3D extends CoreExtensions {
     this.currentSystem.clearEquipType(typeArray);
   }
 
+  /**
+   * 按设备类型筛选室外设备 CSS2D 图标（与当前楼层显隐叠加）。
+   * @param {string|{ deviceType?: string }} param - "all" 显示全部；或具体类型如 menjin
+   */
+  filterDeviceIcon(param) {
+    const deviceType =
+      typeof param === "string" ? param : param?.deviceType ?? param?.type;
+    if (this.ground && typeof this.ground.setDeviceIconTypeFilter === "function") {
+      this.ground.setDeviceIconTypeFilter(deviceType);
+    }
+  }
+
   changeSystemCommon(systemType) {
     /**@type {Subsystem} */
     const targetSystem = this[systemType];

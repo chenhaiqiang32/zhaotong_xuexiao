@@ -127,3 +127,34 @@ export const web3dSelectCode = (id) => {
     "*"
   );
 };
+
+/**
+ * 设备 Icon 类型归一化：水表一期/二期统一为 shuibiao
+ * @param {string} type
+ * @returns {string}
+ */
+export const normalizeDeviceIconType = (type) => {
+  const t = String(type || "").split("_")[0];
+  if (t === "shuibiao1" || t === "shuibiao2") return "shuibiao";
+  return t;
+};
+
+/**
+ * 三维点击设备 CSS2D icon → 通知父页面
+ * @param {{ deviceType: string, deviceName: string }} data
+ */
+export const web3dDeviceIconClick = (data) => {
+  const deviceType = normalizeDeviceIconType(data?.deviceType ?? "");
+  const deviceName = data?.deviceName ?? "";
+  console.log("web3dDeviceIconClick", deviceType, deviceName);
+  window.parent.postMessage(
+    {
+      cmd: "web3dDeviceIconClick",
+      param: {
+        deviceType,
+        deviceName,
+      },
+    },
+    "*"
+  );
+};
