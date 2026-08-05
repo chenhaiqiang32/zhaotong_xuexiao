@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>设备 Icon 通讯调试</title>
+  <style>
+    html, body { margin: 0; height: 100%; }
+    body { display: flex; flex-direction: column; font-family: sans-serif; }
+    #bar { padding: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; border-bottom: 1px solid #ccc; }
+    #click { margin-left: auto; color: #333; font-size: 13px; }
+    iframe { flex: 1; border: 0; width: 100%; }
+  </style>
+</head>
+<body>
+  <div id="bar">
+    <button data-type="all">全部</button>
+    <button data-type="zhinengmensuo">智能门锁</button>
+    <button data-type="LDXX">楼栋信息</button>
+    <button data-type="shuibiao">水表</button>
+    <button data-type="fangkeji">访客机</button>
+    <button data-type="guangbo">广播</button>
+    <button data-type="jiankong">监控</button>
+    <button data-type="menjin">门禁</button>
+    <button data-type="mensuo">门锁(旧)</button>
+    <span id="click">点击回传：无</span>
+  </div>
+  <iframe id="frame" src="https://www.baidu.com/"></iframe>
+  <script>
+    const frame = document.getElementById("frame");
+    const clickEl = document.getElementById("click");
+
+    document.getElementById("bar").addEventListener("click", (e) => {
+      const type = e.target.getAttribute("data-type");
+      if (!type || !frame.contentWindow) return;
+      frame.contentWindow.postMessage(
+        { cmd: "filterDeviceIcon", param: { deviceType: type } },
+        "*"
+      );
+    });
+
+    window.addEventListener("message", (e) => {
+      if (e.source !== frame.contentWindow) return;
+      if (e.data?.cmd !== "web3dDeviceIconClick") return;
+      const { deviceType, deviceName } = e.data.param || {};
+      clickEl.textContent = `点击回传：${deviceType} / ${deviceName}`;
+    });
+  </script>
+</body>
+</html>
