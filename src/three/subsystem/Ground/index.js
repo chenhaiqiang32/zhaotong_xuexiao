@@ -41,7 +41,10 @@ import { Tooltip } from "../../components/Tooltip";
 import { SceneHint } from "../../components/SceneHint";
 import { BuildingHoverRings } from "../../../lib/BuildingHoverRings";
 import { glassEffect } from "../../../shader";
-import { smartLockPage, DEVICE_ICON_SRC } from "../../../api/iotDevice";
+import { smartLockPage, DEVICE_ICON_SRC, DEVICE_TYPE_LABELS, fetchDeviceInfoByType, formatDeviceInfoRows } from "../../../api/iotDevice";
+
+/** 设备.glb 中室外设备分组名（与楼层节点并列） */
+const OUTDOOR_DEVICE_FLOOR_KEY = "ground";
 
 // 获取模型文件列表
 async function getModelFiles() {
@@ -143,15 +146,20 @@ export class Ground extends CustomSystem {
     // 初始化工艺标签存储（类似室内场景的 simpleLabel）
     this.simpleLabel = {};
 
-    // 设备 CSS2D 图标存储：floor -> type -> deviceId -> CSS2DObject（挂到室内 scene）
+    // 设备 CSS2D 图标存储：floor -> type -> deviceId -> CSS2DObject
+    // floor === "ground" 为室外设备，挂在室外 scene；其余楼层挂到室内 scene
     this.deviceIconLabels = {};
     // 扁平索引：floor__type__deviceId -> { floor, type, deviceId, label }
     this.deviceIconIndex = {};
     this.deviceIconIndexByDeviceId = {};
-    /** 当前楼层显隐键；null 表示全部隐藏（未在室内或离开） */
+    /** 当前楼层显隐键；null 表示室外模式（显示 ground 分组，隐藏楼层设备） */
     this._deviceIconFloorKey = null;
     /** 设备类型筛选；null 表示显示全部类型 */
     this._deviceIconTypeFilter = null;
+    /** 室外设备信息牌 */
+    this._outdoorDeviceInfoCss2d = null;
+    this._outdoorDeviceInfoReqSeq = 0;
+    this._selectedOutdoorDeviceIconLabel = null;
 
     // 门锁数据（uuid -> lockInfo，接口1）
     this.smartLockMap = {};
@@ -447,6 +455,11 @@ export class Ground extends CustomSystem {
     // 显示室外场景提示
     this.sceneHint.show("右键双击恢复默认视角");
 
+    // 回到室外：重新挂载 CSS2D，避免牌子停在切走前的屏幕坐标
+    this._deviceIconFloorKey = null;
+    this.restoreOutdoorDeviceIcons();
+    this._applyDeviceIconVisibility();
+
     if (this.groundMesh) {
       this.onLoaded();
       this.isLoaded = true;
@@ -489,13 +502,14 @@ export class Ground extends CustomSystem {
   }
 
   /**
-   * 将设备 CSS2D 图标挂到室内场景（与当前渲染的 indoorSubsystem.scene 一致，否则切换室内后标签不显示）。
-   * 世界坐标在 buildDeviceIconsFromEquipmentModel 中根据室外设备.glb 节点计算后写入 label.userData.deviceIconWorldPos。
+   * 将楼层设备 CSS2D 图标挂到室内场景（跳过 ground 室外分组）。
+   * 世界坐标在 buildDeviceIconsFromEquipmentModel 中根据设备.glb 节点计算后写入 label.userData.deviceIconWorldPos。
    * @param {THREE.Scene} indoorScene
    */
   mountDeviceIconsToIndoorScene(indoorScene) {
     if (!indoorScene || !this.deviceIconLabels) return;
     Object.keys(this.deviceIconLabels).forEach((floor) => {
+      if (this._isOutdoorDeviceFloor(floor)) return;
       Object.keys(this.deviceIconLabels[floor] || {}).forEach((type) => {
         Object.keys(this.deviceIconLabels[floor][type] || {}).forEach((deviceId) => {
           const label = this.deviceIconLabels[floor][type][deviceId];
@@ -512,11 +526,12 @@ export class Ground extends CustomSystem {
   }
 
   /**
-   * 从室内场景移除设备图标（离开室内或清理时调用，不销毁 DOM/CSS2D 对象，便于再次进入室内复用）。
+   * 从室内场景移除楼层设备图标（不处理 ground 室外分组）。
    */
   detachDeviceIconsFromIndoorScene() {
     if (!this.deviceIconLabels) return;
     Object.keys(this.deviceIconLabels).forEach((floor) => {
+      if (this._isOutdoorDeviceFloor(floor)) return;
       Object.keys(this.deviceIconLabels[floor] || {}).forEach((type) => {
         Object.keys(this.deviceIconLabels[floor][type] || {}).forEach((deviceId) => {
           const label = this.deviceIconLabels[floor][type][deviceId];
@@ -529,8 +544,32 @@ export class Ground extends CustomSystem {
     this._deviceIconsMountedScene = null;
   }
 
+  _isOutdoorDeviceFloor(floor) {
+    return String(floor || "").toLowerCase() === OUTDOOR_DEVICE_FLOOR_KEY;
+  }
+
   /**
-   * 解析室外「设备.glb」层级并创建 CSS2D 图标（不挂在室外 mesh 上，写入世界坐标供挂到室内场景）。
+   * 将 ground 分组设备图标挂到室外场景。
+   */
+  mountOutdoorDeviceIconsToGroundScene() {
+    if (!this.scene || !this.deviceIconLabels) return;
+    const byType = this.deviceIconLabels[OUTDOOR_DEVICE_FLOOR_KEY];
+    if (!byType) return;
+    Object.keys(byType).forEach((type) => {
+      Object.keys(byType[type] || {}).forEach((deviceId) => {
+        const label = byType[type][deviceId];
+        if (!label || !label.userData?.deviceIconWorldPos) return;
+        if (label.parent && label.parent !== this.scene) {
+          label.parent.remove(label);
+        }
+        this.scene.add(label);
+        label.position.copy(label.userData.deviceIconWorldPos);
+      });
+    });
+  }
+
+  /**
+   * 解析「设备.glb」：楼层节点 → 室内图标；`ground` 节点 → 室外图标。
    * 须在模型已 this._add 进室外场景后调用，以便 getWorldPosition 正确。
    * @param {THREE.Object3D} model 设备.glb 根节点
    */
@@ -544,7 +583,7 @@ export class Ground extends CustomSystem {
       return this.deviceIconLabels[floor][type];
     };
 
-    const createDeviceIcon = ({ floor, type, deviceId, target }) => {
+    const createDeviceIcon = ({ floor, type, deviceId, target, outdoor }) => {
       const src = iconSrcByType[type];
       if (!src) return null;
 
@@ -558,29 +597,30 @@ export class Ground extends CustomSystem {
         className: "web3d-device-icon__img",
         id: `web3d-device-icon-img-${safeDomId}`,
       });
-      // 底部尖角指向设备世界坐标锚点
       const pointer = createDom({
         className: "web3d-device-icon__pointer",
         id: `web3d-device-icon-pointer-${safeDomId}`,
       });
       const dom = createDom({
-        className: `web3d-device-icon web3d-device-icon--${type}`,
+        className: `web3d-device-icon web3d-device-icon--${type}${
+          outdoor ? " web3d-device-icon--outdoor" : ""
+        }`,
         id: `web3d-device-icon-${safeDomId}`,
         children: [img, pointer],
       });
 
       const label = createCSS2DObject(dom, `deviceIcon_${floor}_${type}_${deviceId}`);
       label.visible = false;
-      // 锚点落在底部尖角（center.y=1 → translateY -100%），使指针指向坐标
       label.center.set(0.5, 1);
 
       const worldPos = new THREE.Vector3();
       target.getWorldPosition(worldPos);
-      worldPos.y += 2;
+      worldPos.y += outdoor ? 3 : 2;
       label.userData.deviceIconWorldPos = worldPos.clone();
       label.userData.deviceIconFloor = floor;
       label.userData.deviceIconType = type;
       label.userData.deviceIconDeviceId = deviceId;
+      label.userData.deviceIconOutdoor = !!outdoor;
 
       dom.style.pointerEvents = "auto";
       dom.style.cursor = "pointer";
@@ -591,6 +631,12 @@ export class Ground extends CustomSystem {
           deviceType: label.userData.deviceIconType,
           deviceName: label.userData.deviceIconDeviceId,
         });
+
+        if (label.userData.deviceIconOutdoor) {
+          void this._activateOutdoorDeviceIcon(label);
+          return;
+        }
+
         const indoor = this.core?.indoorSubsystem;
         if (!indoor || typeof indoor.focusDeviceIconLabel !== "function") return;
         const floorKey = label.userData.deviceIconFloor;
@@ -608,11 +654,10 @@ export class Ground extends CustomSystem {
             });
         }
       };
-      // 用 capture 优先于 OrbitControls，避免点图标被误当成对场景的拖动
       dom.addEventListener("pointerup", onPointerActivate, { capture: true });
 
       ensureStore(floor, type)[deviceId] = label;
-      this.deviceIconIndex[indexKey] = { floor, type, deviceId, label };
+      this.deviceIconIndex[indexKey] = { floor, type, deviceId, label, outdoor: !!outdoor };
       this.deviceIconIndexByDeviceId = this.deviceIconIndexByDeviceId || {};
       this.deviceIconIndexByDeviceId[deviceId] =
         this.deviceIconIndexByDeviceId[deviceId] || [];
@@ -620,6 +665,7 @@ export class Ground extends CustomSystem {
         floor,
         type,
         label,
+        outdoor: !!outdoor,
       });
       return label;
     };
@@ -634,49 +680,324 @@ export class Ground extends CustomSystem {
       const floor = floorGroup?.name;
       if (!floor) return;
 
-      this.deviceIconLabels[floor] = this.deviceIconLabels[floor] || {};
+      const outdoor = this._isOutdoorDeviceFloor(floor);
+      const floorKey = outdoor ? OUTDOOR_DEVICE_FLOOR_KEY : floor;
+
+      this.deviceIconLabels[floorKey] = this.deviceIconLabels[floorKey] || {};
 
       floorGroup.children?.forEach((typeGroup) => {
         const rawTypeName = typeGroup?.name;
         if (!rawTypeName) return;
-        const type = rawTypeName.split("_")[0];
+        // 兼容 "shuibiao1 (38)" 这类 Blender 重名后缀
+        const type = String(rawTypeName).split(/[\s_(]/)[0];
 
         if (!iconSrcByType[type]) return;
 
-        ensureStore(floor, type);
+        ensureStore(floorKey, type);
 
         typeGroup.children?.forEach((deviceNode) => {
-          const deviceId = deviceNode?.name;
+          const deviceId = String(deviceNode?.name || "").trim();
           if (!deviceId) return;
 
           createDeviceIcon({
-            floor,
+            floor: floorKey,
             type,
             deviceId,
             target: deviceNode,
+            outdoor,
           });
         });
       });
     });
 
+    this.mountOutdoorDeviceIconsToGroundScene();
+
     const indoor = this.core?.indoorSubsystem;
     if (indoor?.scene && this.core?.currentSystem === indoor) {
       this.mountDeviceIconsToIndoorScene(indoor.scene);
+      if (indoor.currentFloor?.name) {
+        this.setDeviceIconVisibilityForFloor(indoor.currentFloor.name);
+      }
+    } else {
+      this.setDeviceIconVisibilityForFloor(null);
+    }
+  }
+
+  async _activateOutdoorDeviceIcon(label) {
+    if (this.core?.currentSystem !== this) {
+      await this.core.changeSystem("ground");
+    }
+    this.focusOutdoorDeviceIconLabel(label);
+  }
+
+  clearOutdoorDeviceIconSelection() {
+    this._outdoorDeviceInfoReqSeq += 1;
+    const el = this._selectedOutdoorDeviceIconLabel?.element;
+    if (el) {
+      el.classList.remove("web3d-device-icon--selected");
+    }
+    this._selectedOutdoorDeviceIconLabel = null;
+
+    const board = this._outdoorDeviceInfoCss2d;
+    if (!board) return;
+
+    board.visible = false;
+    const boardEl = board.element;
+    if (boardEl) {
+      boardEl.style.display = "none";
+      boardEl.style.visibility = "hidden";
+      boardEl.style.pointerEvents = "none";
+      // 切到室内后室外 scene 不再 render，必须从 CSS2D 容器里移除 DOM，否则牌子会残留
+      if (boardEl.parentElement) {
+        boardEl.parentElement.removeChild(boardEl);
+      }
+    }
+    if (board.parent) {
+      board.parent.remove(board);
+    }
+    this._outdoorDeviceInfoCss2d = null;
+  }
+
+  _buildOutdoorDeviceInfoBoardRoot({ type, deviceId, title, rows, meta }) {
+    const loading = meta?.loading;
+    const errMsg = meta?.error;
+    const hint = meta?.hint;
+
+    const root = document.createElement("div");
+    root.className = "web3d-smartlock-board web3d-device-info-board";
+
+    const titleEl = document.createElement("div");
+    titleEl.className = "web3d-smartlock-board__title";
+    titleEl.textContent =
+      title || DEVICE_TYPE_LABELS[type] || type || "设备详情";
+
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "web3d-smartlock-board__close";
+    closeBtn.type = "button";
+    closeBtn.textContent = "×";
+    closeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.clearOutdoorDeviceIconSelection();
+    });
+    titleEl.appendChild(closeBtn);
+    root.appendChild(titleEl);
+
+    const body = document.createElement("div");
+    body.className = "web3d-smartlock-board__body";
+    body.addEventListener("wheel", (e) => e.stopPropagation(), {
+      passive: true,
+    });
+
+    const kv = document.createElement("div");
+    kv.className = "web3d-smartlock-board__kv";
+    const addKv = (k, v) => {
+      const ke = document.createElement("div");
+      ke.className = "web3d-smartlock-board__k";
+      ke.textContent = k;
+      const ve = document.createElement("div");
+      ve.className = "web3d-smartlock-board__v";
+      ve.textContent = v == null ? "-" : String(v);
+      kv.appendChild(ke);
+      kv.appendChild(ve);
+    };
+
+    addKv("类型", DEVICE_TYPE_LABELS[type] || type);
+    addKv("编号", deviceId);
+
+    if (loading) {
+      body.appendChild(kv);
+      const t = document.createElement("div");
+      t.className = "web3d-smartlock-board__log-meta";
+      t.textContent = "加载中…";
+      body.appendChild(t);
+      root.appendChild(body);
+      return root;
+    }
+    if (errMsg) {
+      body.appendChild(kv);
+      const t = document.createElement("div");
+      t.className = "web3d-smartlock-board__log-meta";
+      t.textContent = `加载失败: ${errMsg}`;
+      body.appendChild(t);
+      root.appendChild(body);
+      return root;
+    }
+    if (hint) {
+      body.appendChild(kv);
+      const t = document.createElement("div");
+      t.className = "web3d-smartlock-board__log-meta";
+      t.textContent = hint;
+      body.appendChild(t);
+      root.appendChild(body);
+      return root;
+    }
+
+    (rows || []).forEach(([k, v]) => addKv(k, v));
+    body.appendChild(kv);
+    if (!(rows || []).length) {
+      const empty = document.createElement("div");
+      empty.className = "web3d-smartlock-board__log-meta";
+      empty.textContent = "暂无数据";
+      body.appendChild(empty);
+    }
+    root.appendChild(body);
+    return root;
+  }
+
+  _attachOutdoorDeviceInfoBoardToLabel(root, label) {
+    if (!this._outdoorDeviceInfoCss2d) {
+      this._outdoorDeviceInfoCss2d = createCSS2DObject(
+        root,
+        "outdoorDeviceInfoBoard"
+      );
+      this._outdoorDeviceInfoCss2d.center.set(0.5, 1);
+      this.scene.add(this._outdoorDeviceInfoCss2d);
+    } else {
+      const oldEl = this._outdoorDeviceInfoCss2d.element;
+      if (oldEl && oldEl.parentElement) {
+        oldEl.parentElement.replaceChild(root, oldEl);
+      }
+      this._outdoorDeviceInfoCss2d.element = root;
+      if (!this._outdoorDeviceInfoCss2d.parent) {
+        this.scene.add(this._outdoorDeviceInfoCss2d);
+      }
+    }
+    const wp = new THREE.Vector3();
+    label.getWorldPosition(wp);
+    wp.y += 4;
+    this._outdoorDeviceInfoCss2d.position.copy(wp);
+    this._outdoorDeviceInfoCss2d.visible = true;
+    root.style.display = "flex";
+    root.style.overflow = "hidden";
+    root.style.visibility = "visible";
+    root.style.pointerEvents = "auto";
+  }
+
+  async showOutdoorDeviceInfoForLabel(label) {
+    const deviceId = label?.userData?.deviceIconDeviceId;
+    const type = label?.userData?.deviceIconType;
+    if (!deviceId || !type) return;
+
+    // 仅在室外系统展示信息牌；已切室内则直接跳过
+    if (this.core?.currentSystem !== this) return;
+
+    const req = this._outdoorDeviceInfoReqSeq;
+    this._attachOutdoorDeviceInfoBoardToLabel(
+      this._buildOutdoorDeviceInfoBoardRoot({
+        type,
+        deviceId,
+        meta: { loading: true },
+      }),
+      label
+    );
+
+    try {
+      const result = await fetchDeviceInfoByType(type, deviceId, {});
+      if (req !== this._outdoorDeviceInfoReqSeq) return;
+      if (this.core?.currentSystem !== this) {
+        this.clearOutdoorDeviceIconSelection();
+        return;
+      }
+
+      if (result?.meta?.skipped) {
+        this._attachOutdoorDeviceInfoBoardToLabel(
+          this._buildOutdoorDeviceInfoBoardRoot({
+            type,
+            deviceId,
+            meta: { hint: result.meta.reason },
+          }),
+          label
+        );
+        return;
+      }
+
+      const rows = formatDeviceInfoRows(type, result, { deviceId });
+      this._attachOutdoorDeviceInfoBoardToLabel(
+        this._buildOutdoorDeviceInfoBoardRoot({
+          type,
+          deviceId,
+          title: `${DEVICE_TYPE_LABELS[type] || type}详情`,
+          rows,
+        }),
+        label
+      );
+    } catch (e) {
+      if (req !== this._outdoorDeviceInfoReqSeq) return;
+      if (this.core?.currentSystem !== this) {
+        this.clearOutdoorDeviceIconSelection();
+        return;
+      }
+      this._attachOutdoorDeviceInfoBoardToLabel(
+        this._buildOutdoorDeviceInfoBoardRoot({
+          type,
+          deviceId,
+          meta: { error: e?.message || String(e) },
+        }),
+        label
+      );
     }
   }
 
   /**
+   * 室外视角拉近到 ground 分组设备图标并展示信息牌。
+   */
+  focusOutdoorDeviceIconLabel(label) {
+    this.clearOutdoorDeviceIconSelection();
+    if (!label || !label.element) return;
+
+    this._selectedOutdoorDeviceIconLabel = label;
+    label.element.classList.add("web3d-device-icon--selected");
+    label.visible = true;
+    void this.showOutdoorDeviceInfoForLabel(label);
+
+    this.setDeviceIconVisibilityForFloor(null);
+
+    const wp = new THREE.Vector3();
+    label.getWorldPosition(wp);
+    const dist = 28;
+    const endPos = new THREE.Vector3(
+      wp.x + dist * 0.55,
+      wp.y + dist * 0.42,
+      wp.z + dist * 0.55
+    );
+
+    this.tweenControl.changeTo({
+      start: this.camera.position,
+      end: endPos,
+      duration: 1100,
+      onComplete: () => {
+        this.controls.enable = true;
+      },
+      onStart: () => {
+        this.controls.enable = false;
+      },
+    });
+    this.tweenControl.changeTo({
+      start: this.controls.target,
+      end: wp,
+      duration: 1100,
+      onUpdate: () => {
+        this.controls.update();
+      },
+    });
+  }
+
+  /**
    * 按设备类型与编号查找 CSS2D 图标（与 deviceIconLabels 中 type 一致，如 zhinengmensuo、menjin）。
-   * @returns {{ floor: string, label: import("three").Object3D } | null}
+   * @returns {{ floor: string, label: import("three").Object3D, outdoor?: boolean } | null}
    */
   findDeviceIconByTypeAndId(type, deviceId) {
     if (!type || !deviceId || !this.deviceIconLabels) return null;
-    const t = String(type).split("_")[0];
+    const t = String(type).split(/[\s_(]/)[0];
     const id = String(deviceId).trim();
     for (const floor of Object.keys(this.deviceIconLabels)) {
       const byType = this.deviceIconLabels[floor]?.[t];
       if (byType && byType[id]) {
-        return { floor, label: byType[id] };
+        return {
+          floor,
+          label: byType[id],
+          outdoor: this._isOutdoorDeviceFloor(floor),
+        };
       }
     }
     return null;
@@ -695,16 +1016,15 @@ export class Ground extends CustomSystem {
     ) {
       this._deviceIconTypeFilter = null;
     } else {
-      // 水表一期/二期统一为 shuibiao
       this._deviceIconTypeFilter = normalizeDeviceIconType(deviceType);
     }
     this._applyDeviceIconVisibility();
   }
 
   /**
-   * 按楼层键控制设备 CSS2D 图标显隐（图标挂在室内场景时仍有效）。
-   * floorKey 需与室内楼层节点名、设备.glb 第一层节点名一致（如 A01B001F03）。
-   * @param {string|null|undefined} floorKey - 匹配的楼层显示；null/undefined/空字符串则全部隐藏。
+   * 按楼层键控制设备 CSS2D 图标显隐。
+   * - floorKey 为楼层名：仅显示该楼层室内设备
+   * - floorKey 为 null：室外模式，仅显示 ground 分组设备
    */
   setDeviceIconVisibilityForFloor(floorKey) {
     this._deviceIconFloorKey =
@@ -713,15 +1033,21 @@ export class Ground extends CustomSystem {
   }
 
   /**
-   * 综合楼层键 + 类型筛选，刷新设备 CSS2D 图标可见性。
+   * 综合楼层键 + 类型筛选 + 当前场景，刷新设备 CSS2D 图标可见性。
+   * - ground 分组：仅在室外系统显示
+   * - 楼层设备：仅在室内且匹配当前楼层时显示
+   * 切场景后 CSS2D 不再遍历室外对象，隐藏时需同步 DOM；恢复时交给 restore 重新挂载。
    */
   _applyDeviceIconVisibility() {
     if (!this.deviceIconLabels) return;
     const showKey = this._deviceIconFloorKey;
     const typeFilter = this._deviceIconTypeFilter;
+    const isOutdoorSystem = this.core?.currentSystem === this;
+
     Object.keys(this.deviceIconLabels).forEach((fk) => {
       const byType = this.deviceIconLabels[fk];
       if (!byType) return;
+      const isOutdoorFloor = this._isOutdoorDeviceFloor(fk);
       Object.keys(byType).forEach((type) => {
         const byId = byType[type];
         if (!byId) return;
@@ -729,13 +1055,83 @@ export class Ground extends CustomSystem {
           !typeFilter || normalizeDeviceIconType(type) === typeFilter;
         Object.keys(byId).forEach((id) => {
           const label = byId[id];
-          if (label && label.isObject3D) {
-            label.visible =
-              showKey !== null && fk === showKey && typeMatch;
+          if (!label || !label.isObject3D) return;
+
+          let visible = false;
+          if (isOutdoorFloor) {
+            visible = isOutdoorSystem && typeMatch;
+          } else {
+            visible =
+              !isOutdoorSystem &&
+              showKey != null &&
+              showKey !== "" &&
+              fk === showKey &&
+              typeMatch;
+          }
+
+          label.visible = visible;
+          // 仅隐藏时写 DOM；显示交给 CSS2DRenderer（或 restoreOutdoorDeviceIcons）写入 transform
+          if (!visible && label.element) {
+            label.element.style.display = "none";
           }
         });
       });
     });
+  }
+
+  /**
+   * 离开室外时强制隐藏 ground 分组图标 DOM。
+   */
+  hideOutdoorDeviceIcons() {
+    const byType = this.deviceIconLabels?.[OUTDOOR_DEVICE_FLOOR_KEY];
+    if (!byType) return;
+    Object.keys(byType).forEach((type) => {
+      Object.keys(byType[type] || {}).forEach((id) => {
+        const label = byType[type][id];
+        if (!label) return;
+        label.visible = false;
+        if (label.element) label.element.style.display = "none";
+      });
+    });
+  }
+
+  /**
+   * 回到室外：重新挂到 scene，并摘掉旧 DOM，让 CSS2DRenderer 下一帧按镜头重写 transform。
+   * （仅改 display 会导致牌子停在切走前的屏幕坐标，不再跟随旋转）
+   */
+  restoreOutdoorDeviceIcons() {
+    this.mountOutdoorDeviceIconsToGroundScene();
+
+    const byType = this.deviceIconLabels?.[OUTDOOR_DEVICE_FLOOR_KEY];
+    if (!byType) return;
+
+    const typeFilter = this._deviceIconTypeFilter;
+    Object.keys(byType).forEach((type) => {
+      Object.keys(byType[type] || {}).forEach((id) => {
+        const label = byType[type][id];
+        if (!label?.isObject3D) return;
+
+        const typeMatch =
+          !typeFilter || normalizeDeviceIconType(type) === typeFilter;
+        const visible = typeMatch;
+        label.visible = visible;
+
+        const el = label.element;
+        if (!el) return;
+
+        // 从 CSS2D 容器摘掉，清除旧 transform；下一帧 render 会 appendChild 并重算位置
+        if (el.parentNode) {
+          el.parentNode.removeChild(el);
+        }
+        el.style.transform = "";
+        el.style.display = visible ? "" : "none";
+      });
+    });
+
+    // 确保世界矩阵更新，供首帧投影使用
+    if (this.scene?.updateMatrixWorld) {
+      this.scene.updateMatrixWorld(true);
+    }
   }
 
   clearDangerFence() {
@@ -1655,6 +2051,8 @@ string} name
 
   onLeave() {
     // this.weather.resetComposer();
+    this.clearOutdoorDeviceIconSelection();
+    this.hideOutdoorDeviceIcons();
     this.hideAllBuildingLabel(); // 离开时隐藏所有建筑牌子
     this.resetControls();
     this.setCameraState(false);

@@ -268,7 +268,9 @@ export class Store3D extends CoreExtensions {
   }
 
   /**
-   * 按设备类型（如 zhinengmensuo、menjin）与设备编号搜索室外设备索引，进入对应楼层并拉近视角、选中样式
+   * 按设备类型与编号搜索设备索引并定位。
+   * - floor === "ground"：留在室外场景拉近并展示信息牌
+   * - 其他楼层：进入室内对应楼层后拉近
    */
   async focusDeviceByTypeAndId(deviceType, deviceId) {
     const found = this.ground.findDeviceIconByTypeAndId(deviceType, deviceId);
@@ -278,7 +280,14 @@ export class Store3D extends CoreExtensions {
       );
       return false;
     }
-    const { floor, label } = found;
+    const { floor, label, outdoor } = found;
+    if (outdoor || floor === "ground") {
+      if (this.currentSystem !== this.ground) {
+        await this.changeSystem("ground");
+      }
+      this.ground.focusOutdoorDeviceIconLabel(label);
+      return true;
+    }
     const buildingName = Store3D.extractBuildingFromFloorKey(floor);
     await this.enterIndoorAndFloor(buildingName, floor);
     this.indoorSubsystem.focusDeviceIconLabel(label);

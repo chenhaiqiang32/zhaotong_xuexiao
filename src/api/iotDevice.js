@@ -11,6 +11,8 @@ export const DEVICE_TYPE_LABELS = {
   guangbo: "广播",
   jiankong: "监控",
   menjin: "门禁",
+  kongtiao: "空调",
+  shishijiankong: "实时监控",
 };
 
 /** 图标路径（与 public/icons 一致；mensuo 兼容旧模型节点） */
@@ -24,6 +26,8 @@ export const DEVICE_ICON_SRC = {
   guangbo: "./icons/guangbo.png",
   jiankong: "./icons/jiankong.png",
   menjin: "./icons/menjin.png",
+  kongtiao: "./icons/kongtiao.png",
+  shishijiankong: "./icons/shishijiankong.png",
 };
 
 function stripDahuaSuffix(id) {
@@ -193,6 +197,18 @@ export async function accessControlWaterList({
 }
 
 /**
+ * 空调设备详情
+ * GET /air-conditioner/devices?devId=
+ * 代理：/api → https://lot.nimt.edu.cn（见 vite.config.js）
+ */
+export async function airConditionerByDevId(devId) {
+  const res = await iotHttp.get("/air-conditioner/devices", {
+    params: { devId: String(devId || "") },
+  });
+  return res.data;
+}
+
+/**
  * 按设备类型 + 图标编号调取对应 IoT 接口
  * @param {string} type 设备类型（模型节点名前缀）
  * @param {string} deviceId 点击图标得到的编号
@@ -252,6 +268,20 @@ export async function fetchDeviceInfoByType(type, deviceId, ctx = {}) {
       return {
         api: "access-control/water-list/list",
         data: await accessControlWaterList({ doorName: buildingName }),
+      };
+    case "kongtiao":
+      return {
+        api: "air-conditioner/devices",
+        data: await airConditionerByDevId(id),
+      };
+    case "shishijiankong":
+      return {
+        api: null,
+        data: null,
+        meta: {
+          skipped: true,
+          reason: "实时监控仅定位展示，无需调用接口",
+        },
       };
     default:
       return {
@@ -508,6 +538,66 @@ function rowsFromAccessWaterList(payload) {
   return rows;
 }
 
+/** 空调 air-conditioner/devices → 中文字段（见 空调查询与控制接口文档） */
+function rowsFromAirConditioner(payload, devId) {
+  const rows = [];
+  const data = unwrapBizData(payload);
+  const item = firstListItem(data, (r) =>
+    devId
+      ? String(r?.dev_id) === String(devId) ||
+        String(r?.devId) === String(devId) ||
+        String(r?.deviceId) === String(devId) ||
+        String(r?.id) === String(devId)
+      : false
+  );
+  if (!item || typeof item !== "object") return rows;
+
+  const tempC = (v) => {
+    if (v == null || v === "") return null;
+    const n = Number(v);
+    if (!Number.isFinite(n)) return dash(v);
+    return `${(n / 10).toFixed(n % 10 === 0 ? 0 : 1)}℃`;
+  };
+  const onlineText = (v) =>
+    v == null || v === "" ? "-" : Number(v) === 88 ? "在线" : "离线";
+  const pwrText = (v) => mapEnum(v, { 0: "关", 1: "开" });
+  const modeText = (v) =>
+    mapEnum(v, { 1: "制热", 2: "制冷", 3: "送风" });
+  const fanText = (v) =>
+    mapEnum(v, { 1: "低", 2: "中", 3: "高", 4: "自动" });
+  const lockText = (v) => mapEnum(v, { 0: "未锁定", 1: "锁定" });
+
+  pushRow(rows, "设备名称", item.dev_name || item.deviceName || item.name);
+  pushRow(rows, "设备 ID", item.dev_id ?? item.devId ?? item.id);
+  pushRow(rows, "设备类型", item.dev_type_name);
+  pushRow(rows, "在线状态", onlineText(item.online), { skipEmpty: false });
+  pushRow(rows, "开关", pwrText(item.pwr), { skipEmpty: false });
+  pushRow(rows, "模式", modeText(item.mode), { skipEmpty: false });
+  pushRow(rows, "当前风速", fanText(item.fan), { skipEmpty: false });
+  pushRow(rows, "设定风速", fanText(item.fan_set), { skipEmpty: false });
+  pushRow(rows, "当前温度", tempC(item.temp), { skipEmpty: false });
+  pushRow(rows, "设定温度", tempC(item.temp_set), { skipEmpty: false });
+  pushRow(rows, "锁定状态", lockText(item.kt_lock));
+  pushRow(rows, "附加电源", pwrText(item.sf_pwr));
+  pushRow(rows, "楼栋", item.floor_name || item.building_name);
+  pushRow(rows, "房间", item.room_name);
+  pushRow(rows, "区域", item.area_name);
+  pushRow(rows, "组织单元", item.unit_name);
+  pushRow(rows, "网关 MAC", item.wg_mac);
+  pushRow(rows, "设备子 ID", item.wg_qid);
+  pushRow(rows, "网关 ID", item.wg_id);
+  pushRow(rows, "类型标识", item.pid);
+  pushRow(rows, "信号/序号", item.xh);
+  pushRow(rows, "累计运行(时)", item.sum_runtime);
+  pushRow(rows, "高档运行(时)", item.hig_runtime);
+  pushRow(rows, "中档运行(时)", item.mid_runtime);
+  pushRow(rows, "低档运行(时)", item.low_runtime);
+  pushRow(rows, "备注", item.dev_bz === "undefined" ? null : item.dev_bz);
+  pushRow(rows, "故障码", item.err);
+  pushRow(rows, "更新时间", item.uptime);
+  return rows;
+}
+
 /** 宿管房间床位 roomBed/list → result.data[] */
 function rowsFromRoomBed(payload, fjid) {
   const rows = [];
@@ -598,6 +688,9 @@ export function formatDeviceInfoRows(type, result = {}, ctx = {}) {
   }
   if (api === "api/roomBed/list" || t === "LDXX") {
     return rowsFromRoomBed(data, deviceId);
+  }
+  if (api === "air-conditioner/devices" || t === "kongtiao") {
+    return rowsFromAirConditioner(data, deviceId);
   }
   return [];
 }

@@ -62,12 +62,15 @@ body,
     border-top-color: #00d4ff;
 }
 
-/* 门锁信息牌子（CSS2D DOM） */
+/* 门锁 / 设备信息牌子（CSS2D DOM） */
 .web3d-smartlock-board {
     position: absolute;
-    transform: translate(-50%, -120%);
+    /* 锚点偏移交给 CSS2DObject.center，勿在此写 transform（会被 CSS2DRenderer 覆盖） */
     min-width: 260px;
+    width: max-content;
     max-width: 360px;
+    max-height: min(52vh, 420px);
+    height: auto;
     padding: 10px 12px;
     border-radius: 10px;
     background: rgba(15, 22, 36, 0.92);
@@ -75,6 +78,10 @@ body,
     box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
     color: #eaf7ff;
     pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    overflow: hidden; /* 外层裁剪，滚动交给 body */
 }
 
 .web3d-smartlock-board__title {
@@ -86,6 +93,30 @@ body,
     align-items: center;
     justify-content: space-between;
     gap: 8px;
+    flex: 0 0 auto;
+}
+
+.web3d-smartlock-board__body {
+    flex: 1 1 auto;
+    min-height: 0; /* flex 子项可被压缩，否则内容撑开无法滚动 */
+    max-height: min(44vh, 360px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-right: 4px;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 212, 255, 0.45) transparent;
+}
+
+.web3d-smartlock-board__body::-webkit-scrollbar {
+    width: 5px;
+}
+
+.web3d-smartlock-board__body::-webkit-scrollbar-thumb {
+    background: rgba(0, 212, 255, 0.45);
+    border-radius: 4px;
 }
 
 .web3d-smartlock-board__close {
@@ -99,7 +130,7 @@ body,
 
 .web3d-smartlock-board__kv {
     display: grid;
-    grid-template-columns: 88px 1fr;
+    grid-template-columns: 96px 1fr;
     row-gap: 6px;
     column-gap: 10px;
     font-size: 12px;

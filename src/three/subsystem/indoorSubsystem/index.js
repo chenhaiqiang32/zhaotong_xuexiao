@@ -443,6 +443,9 @@ export class IndoorSubsystem extends CustomSystem {
       typeof this.core.ground.mountDeviceIconsToIndoorScene === "function"
     ) {
       this.core.ground.mountDeviceIconsToIndoorScene(this.scene);
+      this.core.ground.clearOutdoorDeviceIconSelection?.();
+      this.core.ground.hideOutdoorDeviceIcons?.();
+      this.core.ground._applyDeviceIconVisibility?.();
     }
   }
   cameraMove(group, startPosition = null) {
@@ -684,6 +687,12 @@ export class IndoorSubsystem extends CustomSystem {
     title.appendChild(closeBtn);
     root.appendChild(title);
 
+    const body = document.createElement("div");
+    body.className = "web3d-smartlock-board__body";
+    body.addEventListener("wheel", (e) => e.stopPropagation(), {
+      passive: true,
+    });
+
     const kv = document.createElement("div");
     kv.className = "web3d-smartlock-board__kv";
 
@@ -707,41 +716,41 @@ export class IndoorSubsystem extends CustomSystem {
     addKv("电量", lock?.battery);
     addKv("固件版本", lock?.firmwareVersion);
 
-    root.appendChild(kv);
+    body.appendChild(kv);
 
     const divider = document.createElement("div");
     divider.className = "web3d-smartlock-board__divider";
-    root.appendChild(divider);
+    body.appendChild(divider);
 
     const logsTitle = document.createElement("div");
     logsTitle.className = "web3d-smartlock-board__logs-title";
     // 仅显示“开门记录”（图2）
     logsTitle.textContent = "开门记录";
-    root.appendChild(logsTitle);
+    body.appendChild(logsTitle);
 
     if (loading) {
       const t = document.createElement("div");
       t.className = "web3d-smartlock-board__log-meta";
       t.textContent = "开门记录加载中…";
-      root.appendChild(t);
+      body.appendChild(t);
     } else if (errMsg) {
       const t = document.createElement("div");
       t.className = "web3d-smartlock-board__log-meta";
       t.textContent = `加载失败: ${errMsg}`;
-      root.appendChild(t);
+      body.appendChild(t);
     } else if (noQuery) {
       const t = document.createElement("div");
       t.className = "web3d-smartlock-board__log-meta";
       t.textContent =
         "无接口1数据：无法从 uuid 关联 lockName / apartmentName，不请求开门记录。";
-      root.appendChild(t);
+      body.appendChild(t);
     } else {
       const showLogs = (openLogs || []).slice(0, 12);
       if (!showLogs.length) {
         const empty = document.createElement("div");
         empty.className = "web3d-smartlock-board__log-meta";
         empty.textContent = "暂无记录";
-        root.appendChild(empty);
+        body.appendChild(empty);
       } else {
         showLogs.forEach((r) => {
           const row = document.createElement("div");
@@ -754,17 +763,19 @@ export class IndoorSubsystem extends CustomSystem {
           metaE.textContent = `${r.name || "-"} ${r.cardCode || "-"} · ${r.operTime || "-"}`;
           row.appendChild(op);
           row.appendChild(metaE);
-          root.appendChild(row);
+          body.appendChild(row);
         });
       }
     }
 
+    root.appendChild(body);
     return root;
   }
 
   _attachSmartLockInfoBoardToLabel(root, label) {
     if (!this._smartLockInfoCss2d) {
       this._smartLockInfoCss2d = createCSS2DObject(root, "smartLockInfoBoard");
+      this._smartLockInfoCss2d.center.set(0.5, 1);
       this.scene.add(this._smartLockInfoCss2d);
     } else {
       const oldEl = this._smartLockInfoCss2d.element;
@@ -778,7 +789,8 @@ export class IndoorSubsystem extends CustomSystem {
     wp.y += 3.0;
     this._smartLockInfoCss2d.position.copy(wp);
     this._smartLockInfoCss2d.visible = true;
-    root.style.display = "block";
+    root.style.display = "flex";
+    root.style.overflow = "hidden";
   }
 
   /**
@@ -869,6 +881,12 @@ export class IndoorSubsystem extends CustomSystem {
     titleEl.appendChild(closeBtn);
     root.appendChild(titleEl);
 
+    const body = document.createElement("div");
+    body.className = "web3d-smartlock-board__body";
+    body.addEventListener("wheel", (e) => e.stopPropagation(), {
+      passive: true,
+    });
+
     const kv = document.createElement("div");
     kv.className = "web3d-smartlock-board__kv";
 
@@ -887,42 +905,46 @@ export class IndoorSubsystem extends CustomSystem {
     addKv("编号", deviceId);
 
     if (loading) {
-      root.appendChild(kv);
+      body.appendChild(kv);
       const t = document.createElement("div");
       t.className = "web3d-smartlock-board__log-meta";
       t.textContent = "加载中…";
-      root.appendChild(t);
+      body.appendChild(t);
+      root.appendChild(body);
       return root;
     }
 
     if (errMsg) {
-      root.appendChild(kv);
+      body.appendChild(kv);
       const t = document.createElement("div");
       t.className = "web3d-smartlock-board__log-meta";
       t.textContent = `加载失败: ${errMsg}`;
-      root.appendChild(t);
+      body.appendChild(t);
+      root.appendChild(body);
       return root;
     }
 
     if (hint) {
-      root.appendChild(kv);
+      body.appendChild(kv);
       const t = document.createElement("div");
       t.className = "web3d-smartlock-board__log-meta";
       t.textContent = hint;
-      root.appendChild(t);
+      body.appendChild(t);
+      root.appendChild(body);
       return root;
     }
 
     (rows || []).forEach(([k, v]) => addKv(k, v));
-    root.appendChild(kv);
+    body.appendChild(kv);
 
     if (!(rows || []).length) {
       const empty = document.createElement("div");
       empty.className = "web3d-smartlock-board__log-meta";
       empty.textContent = "暂无数据";
-      root.appendChild(empty);
+      body.appendChild(empty);
     }
 
+    root.appendChild(body);
     return root;
   }
 
